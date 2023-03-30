@@ -1,0 +1,152 @@
+[
+    {
+        "erato" : {
+            "name" : "petiverana",
+            "label" : 24
+        },
+        "melpomene" : {
+            "name" : "rosina",
+            "label" : 27
+        }
+    },
+    {
+        "erato" : {
+            "name" : "demophoon",
+            "label" : 7
+        },
+        "melpomene" : {
+            "name" : "rosina",
+            "label" : 27
+        }
+    },
+    {
+        "erato" : {
+            "name" : "hydara",
+            "label" : 16
+        },
+        "melpomene" : {
+            "name" : "melpomene",
+            "label" : 20
+        }
+    },
+    {
+        "erato" : {
+            "name" : "venus",
+            "label" : 30
+        },
+        "melpomene" : {
+            "name" : "vulcanus",
+            "label" : 32
+        }
+    },
+    {
+        "erato" : {
+            "name" : "cyrbia",
+            "label" : 5
+        },
+        "melpomene" : {
+            "name" : "cythera",
+            "label" : 6
+        }
+    },
+    {
+        "erato" : {
+            "name" : "notabilis",
+            "label" : 23
+        },
+        "melpomene" : {
+            "name" : "plesseni",
+            "label" : 26
+        }
+    },
+    {
+        "erato" : {
+            "name" : "etylus",
+            "label" : 12
+        },
+        "melpomene" : {
+            "name" : "ecuadorensis",
+            "label" : 9
+        }
+    },
+    {
+        "erato" : {
+            "name" : "emma",
+            "label" : 10
+        },
+        "melpomene" : {
+            "name" : "aglaope",
+            "label" : 0
+        }
+    },
+    {
+        "erato" : {
+            "name" : "favorinus",
+            "label" : 13
+        },
+        "melpomene" : {
+            "name" : "amaryllis",
+            "label" : 2
+        }
+    },
+    {
+        "erato" : {
+            "name" : "microclea",
+            "label" : 21
+        },
+        "melpomene" : {
+            "name" : "xenoclea",
+            "label" : 33
+        }
+    },
+    {
+        "erato" : {
+            "name" : "lativitta",
+            "label" : 17
+        },
+        "melpomene" : {
+            "name" : "malleti",
+            "label" : 19
+        }
+    },
+    {
+        "erato" : {
+            "name" : "luscombei",
+            "label" : 18
+        },
+        "melpomene" : {
+            "name" : "schunkei",
+            "label" : 28
+        }
+    },
+    {
+        "erato" : {
+            "name" : "erato",
+            "label" : 11
+        },
+        "melpomene" : {
+            "name" : "thelxiopeia",
+            "label" : 29
+        }
+    },
+    {
+        "erato" : {
+            "name" : "phyllis",
+            "label" : 25
+        },
+        "melpomene" : {
+            "name" : "burchelli",
+            "label" : 3
+        }
+    },
+    {
+        "erato" : {
+            "name" : "phyllis",
+            "label" : 25
+        },
+        "melpomene" : {
+            "name" : "nanna",
+            "label" : 22
+        }
+    }
+]

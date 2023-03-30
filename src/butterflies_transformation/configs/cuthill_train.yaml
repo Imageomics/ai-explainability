@@ -1,0 +1,4 @@
+DATASET: /home/carlyn.1/datasets/cuthill_curated/
+DATA_TO_TRAIN: train
+
+EXP_NAME: cuthill_train

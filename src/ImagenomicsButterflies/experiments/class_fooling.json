@@ -1,0 +1,13 @@
+[
+    {
+        "latent_start" : "/research/nfs_chao_209/david/img_to_img/autoencoder_default_w",
+        "learn_param" : "w",
+        "batch" : false,
+        "entropy" : false,
+        "lr" : 0.001,
+        "num_steps" : 1000,
+        "no_regularizer" : false,
+        "smooth" : false,
+        "superpixel" : false
+    }
+]
