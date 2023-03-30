@@ -1,9 +1,0 @@
-[
-    {
-        "latent_start" : "autoencoder",
-        "perceptual_default" : true,
-        "learn_param" : "w",
-        "lr" : 0.001,
-        "num_steps" :1
-    }
-]
