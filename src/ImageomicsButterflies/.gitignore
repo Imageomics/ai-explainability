@@ -1,0 +1,7 @@
+datasets
+src/*.png
+src/*.out
+src/*.txt
+src/*.tif
+src/*.mp4
+src/*.log
