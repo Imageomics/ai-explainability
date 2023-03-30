@@ -1,0 +1,6 @@
+data/
+output/
+output_recon/
+tmp/
+*.png
+*.out
