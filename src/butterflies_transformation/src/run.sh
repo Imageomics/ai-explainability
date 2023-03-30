@@ -1,0 +1,1 @@
+python tmp.py --z_dim 512 --epochs 500 --warmup_lr 0.0003 --lr 0.0001
