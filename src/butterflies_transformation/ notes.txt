@@ -1,3 +1,0 @@
-Classifier trained for 50 epochs
-Classifier train accuracy: 100%
-Classifier test accuracy: 89.99%
