@@ -89,3 +89,7 @@ git fetch --prune # optionally, this removes any references to deleted remote br
 ```
 git pull
 ```
+
+And for a slightly abbreviated visual summary, the same workflow looks like this:
+![image](https://user-images.githubusercontent.com/31709066/230167049-6315b056-74d5-4a18-bb60-5bc06a191783.png)
+(image credit: [dbt Labs](https://www.getdbt.com/analytics-engineering/transformation/git-workflow/))
