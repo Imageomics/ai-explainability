@@ -34,7 +34,14 @@ git pull origin main
 git checkout feature/simulate-vision
 git merge main
 ```
-7. **Push your new branch to the remote.** This should contain any updates made by others as well as your new changes.
+7. **Push your new branch to the remote.** This should contain any updates made by others as well as your new changes. The first time this is done for a branch, you will need to map the branch on your local 'downstream' repo to the corresponding branch on the remote 'upstream' repo. Following this, simply push.
+```
+git push --set-upstream origin HEAD # to auto-match upstream branch name to your current branch name
+# or
+git push --set-upstream origin feature/simulate-vision # to specify the upstream branch name
+# or
+git push # subsequent pushes for this branch once the remote tracking branch is set
+```
 8. **Make, commit, and push with this branch as needed.** Repeat steps 3-7 until results are in a state suitable to merge with the project's `main` branch.
 9. **Open a Pull Request.** On the GitHub repo page, click the "Pull requests tab, click the "New pull requests" button, select the new branch you pushed as the head branch and keep the base branch as `main` (where you want to merge your changes into). Click "Create pull request. You can also use draft PRs to solicit feedback before opening a real PR. You can also consider using the [GitHub CLI]([url](https://cli.github.com/)) for this step. (_pro-tip_, keep PRs small and manageable for review; the scope should be focused on the task, feature, or bug fix associated with the branch)
 10. **Verify the repositories and branches in the PR.** Base Repository: The original repo you have write access to. Head Repository: The same repo. Base Branch: `main` (or the branch you want to merge your changes into) Compare Branch: Your new branch with changes.
