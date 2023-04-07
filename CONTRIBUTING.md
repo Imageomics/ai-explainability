@@ -4,7 +4,7 @@ This document outlines guidelines for collaboratively contributing to this repos
 
 Importantly, this workflow suggests that contributions are created through PRs rather than directly committing to or merging into the `main` branch.
 
-**To make a contribution with repository write access, please follow these steps:**
+## To contribute as an Imageomics member with write access:
 ### 1. Clone the repo to your computer.<br>
 ```
 git clone https://github.com/Imageomics/<repo-name>.git
