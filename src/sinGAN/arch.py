@@ -21,8 +21,11 @@ class SinGAN_GenerationLayer(nn.Module):
             nn.Tanh()
         )
 
-    def forward(self, x=None):
-        z = torch.normal(0, 1, size=(1, 3, self.layer_size, self.layer_size))
+    def forward(self, x=None, no_noise=False):
+        if no_noise:
+            z = torch.zeros_like(x)
+        else:
+            z = torch.normal(0, 1, size=(1, 3, self.layer_size, self.layer_size))
         z = z.to(list(self.parameters())[0].get_device())
         if x is not None:
             z += x
@@ -75,8 +78,6 @@ class SinGAN_DiscriminatorLayer(nn.Module):
         return out
         
 
-
-
 class SinGAN(nn.Module):
     def __init__(self, num_levels=4, img_size=128):
         super().__init__()
@@ -95,14 +96,26 @@ class SinGAN(nn.Module):
         self.gen_layers = nn.ModuleList(gen_layers)
         self.disc_layers = nn.ModuleList(disc_layers)
 
-    def forward(self, x):
+    def get_D_parameters(self):
+        params = []
+        for l in self.disc_layers:
+            params += list(l.parameters())
+        return params
+    
+    def get_G_parameters(self):
+        params = []
+        for l in self.gen_layers:
+            params += list(l.parameters())
+        return params
+
+    def forward(self, x, no_noise=False):
         fake = None
         layer_outputs = []
         for i in range(self.num_levels):
             cur_size = int(self.start_size * (2**i))
             layer_pos = self.num_levels - (i+1)
             real = transforms.functional.resize(x, (cur_size, ))
-            fake = self.gen_layers[layer_pos](fake)
+            fake = self.gen_layers[layer_pos](fake, False if i == 0 else no_noise)
             real_out = self.disc_layers[layer_pos](real)
             fake_out = self.disc_layers[layer_pos](fake)
             layer_outputs.append([real, fake, real_out, fake_out])
