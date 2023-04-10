@@ -1,0 +1,8 @@
+Features:
+    O Update autoencoder architecture with more stable model
+
+Experiments:
+    O Manually edit delta vector and observe changes
+        - Observe changes
+    O After learning the delta vector, threshold values > 1 to 1 and < -1 to -1, and others to 0
+        - Observe changes
