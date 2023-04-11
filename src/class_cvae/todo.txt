@@ -1,5 +1,7 @@
 Features:
     O Update autoencoder architecture with more stable model
+        o Transfer and adapt code from https://github.com/CompVis/iin/blob/master/iin/models/ae.py
+        o Test usability of code on this project
 
 Experiments:
     O Manually edit delta vector and observe changes
