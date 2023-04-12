@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 class MaxQueue:
     def __init__(self, size=10):
@@ -34,7 +34,6 @@ def set_seed(seed=2023):
 
 def create_img_from_text(width, height, text):
     PAD = 2
-    img_size = img.shape[:2]
     text_img = (np.ones((height, width, 3)) * 255).astype(np.uint8)
     text_img = Image.fromarray(text_img)
     text_img_dr = ImageDraw.Draw(text_img)
