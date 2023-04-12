@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor, Compose, Resize
+from torchvision.transforms import ToTensor, Compose, Resize, RandomRotation
 
 from PIL import Image
 
@@ -27,12 +27,17 @@ def resize(img):
     return Resize((28, 28))(img)
 
 def load_data(batch_size):
-    transform = Compose([
+    train_transform = Compose([
+        RandomRotation(45),
         Resize((32, 32)),
         ToTensor()
     ])
-    train_dset = MNIST(root="data", train=True, transform=transform, download=True)
-    test_dset = MNIST(root="data", train=False, transform=transform)
+    test_transform = Compose([
+        Resize((32, 32)),
+        ToTensor()
+    ])
+    train_dset = MNIST(root="data", train=True, transform=train_transform, download=True)
+    test_dset = MNIST(root="data", train=False, transform=test_transform)
     train_dloader = DataLoader(train_dset, batch_size=batch_size, shuffle=True)
     test_dloader = DataLoader(test_dset, batch_size=batch_size, shuffle=False)
 
@@ -129,6 +134,7 @@ def get_args():
     parser.add_argument('--add_classifier', action='store_true', default=False)
     parser.add_argument('--add_img_classifier', action='store_true', default=False)
     parser.add_argument('--force_disentanglement', action='store_true', default=False)
+    parser.add_argument('--add_rotation', action='store_true', default=False)
     parser.add_argument('--pretrain_img_classifier', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=100)
