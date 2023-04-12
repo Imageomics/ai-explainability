@@ -109,7 +109,6 @@ def save_imgs(reals, fakes, confs, org_confs, output):
 
     Image.fromarray(final[:, :, 0]).save(output)
 
-
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find('Conv2d') != -1 or classname.find('ConvTranspose2d') != -1:
@@ -121,3 +120,10 @@ def init_weights(m):
     elif classname.find('Linear') != -1:
         nn.init.xavier_normal_(m.weight)
         nn.init.zeros_(m.bias)
+
+def save_tensor_as_graph(ten, output="tensor_graph.png"):
+    # Assumes 1-D tensor
+    z = ten.detach().cpu().numpy()
+    plt.bar(np.arange(len(z)), z)
+    plt.savefig(output)
+    plt.close()

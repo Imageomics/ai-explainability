@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from models import Encoder, Decoder, Classifier, ImageClassifier
 
-from utils import create_img_from_text, save_imgs, MaxQueue, set_seed
+from utils import create_img_from_text, save_imgs, MaxQueue, set_seed, save_tensor_as_graph
 
 """
 Goal: Create visual counterfactual
@@ -60,14 +60,6 @@ def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
     diffs = (org_img_recon - imgs_recon)
     loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
     return loss
-
-def save_z_chg(z_chg, output="z.png"):
-    # output is broken
-    z = z_chg.detach().cpu().numpy()
-    plt.bar(np.arange(len(z)), z)
-    plt.savefig(output)
-    plt.close()
-
 
 if __name__ == "__main__":
     set_seed()
@@ -232,11 +224,11 @@ if __name__ == "__main__":
         with torch.no_grad():
             if (epoch+1) % 1000 == 0:
                 if args.force_disentanglement:
-                    save_z_chg(sig_z_chg, "z_chg.png")
+                    save_tensor_as_graph(sig_z_chg, "z_chg.png")
                 else:
-                    save_z_chg(z_chg, "z_chg.png")
-                save_z_chg(z_edit[0], "z_edit.png")
-                save_z_chg(z[0], "z.png")
+                    save_tensor_as_graph(z_chg, "z_chg.png")
+                save_tensor_as_graph(z_edit[0], "z_edit.png")
+                save_tensor_as_graph(z[0], "z.png")
             if org_img_recon is None:
                 org_img_recon = decoder(z)
             save_imgs(org_img_recon, imgs_recon, confs, org_confs, args.output)

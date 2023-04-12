@@ -48,14 +48,6 @@ def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
     loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
     return loss
 
-def save_z_chg(z_chg, output="z.png"):
-    # output is broken
-    z = z_chg.detach().cpu().numpy()
-    plt.bar(np.arange(len(z)), z)
-    plt.savefig(output)
-    plt.close()
-
-
 if __name__ == "__main__":
     set_seed()
     args = get_args()
