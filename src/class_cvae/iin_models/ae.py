@@ -292,7 +292,7 @@ class Distribution(object):
         return self.mean
 
 
-class Model(nn.Module):
+class IIN_AE(nn.Module):
     def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic):
         super().__init__()
         import torch.backends.cudnn as cudnn
