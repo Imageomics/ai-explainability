@@ -23,6 +23,9 @@ from utils import init_weights, create_z_from_label
 Goal: Train a variational autoencoder with a classification head on the latent space.
 """
 
+def resize(img):
+    return Resize((28, 28))(img)
+
 def load_data(batch_size):
     transform = Compose([
         Resize((32, 32)),
@@ -127,9 +130,10 @@ def get_args():
     parser.add_argument('--add_img_classifier', action='store_true', default=False)
     parser.add_argument('--force_disentanglement', action='store_true', default=False)
     parser.add_argument('--pretrain_img_classifier', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--epochs', type=int, default=20)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--warm_up_epochs', type=int, default=3)
+    parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--recon_lambda', type=float, default=1)
     parser.add_argument('--cls_lambda', type=float, default=0.1)
     parser.add_argument('--img_cls_lambda', type=float, default=0.1)
@@ -176,7 +180,7 @@ if __name__ == "__main__":
     params = list(iin_ae.parameters())
     if args.add_classifier:
         params += list(classifier.parameters())
-    if args.add_img_classifier:
+    if args.add_img_classifier or args.pretrain_img_classifier:
         if args.pretrain_img_classifier is not None:
             img_classifier.load_state_dict(torch.load(args.pretrain_img_classifier))
         else:
@@ -190,6 +194,7 @@ if __name__ == "__main__":
             "latent_cls" : 0,
             "sparcity" : 0,
             "normal" : 0,
+            "disentangle" : 0,
             "img_cls" : 0,
             "all" : 0
         }
@@ -208,15 +213,19 @@ if __name__ == "__main__":
             lbls = lbls.cuda()
 
             z_dist = iin_ae.encode(imgs)
-            z = z_dist.sample()
-            imgs_recon = iin_ae.decode(z)
+            z = nn.Sigmoid()(z_dist.sample())
+            z_force = create_z_from_label(lbls).float()
+            z_force = z_force.unsqueeze(2).unsqueeze(3)
+            if epoch < args.warm_up_epochs:
+                imgs_recon = iin_ae.decode(torch.cat((z_force, torch.zeros_like(z[:, 7:, :, :])), 1))
+            else:
+                imgs_recon = iin_ae.decode(z)
 
             recon_loss = recon_loss_fn(imgs, imgs_recon)
             losses["recon"] += recon_loss.item()
             loss = recon_loss * args.recon_lambda
 
             if args.force_disentanglement:
-                z_force = create_z_from_label(lbls)
                 reg = nn.L1Loss()(z[:, :7], z_force)
                 losses["disentangle"] += reg.item()
                 loss += reg * args.force_dis_lambda
@@ -244,11 +253,8 @@ if __name__ == "__main__":
 
                 correct += (preds == lbls).sum().item()
 
-            if args.add_img_classifier:
-                if args.classify_begin:
-                    out = img_classifier(imgs)
-                else:
-                    out = img_classifier(imgs_recon)
+            if args.add_img_classifier or args.pretrain_img_classifier:
+                out = img_classifier(resize(imgs_recon))
 
                 img_cls_loss = class_loss_fn(out, lbls)
                 losses["img_cls"] += img_cls_loss.item()
@@ -270,11 +276,11 @@ if __name__ == "__main__":
         for key in losses:
             losses[key] = round(losses[key] / len(train_dloader), 4)
 
-        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Sparsity Loss: {losses['sparcity']}"
+        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Disentangle Loss: {losses['disentangle']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Sparsity Loss: {losses['sparcity']}"
         if args.add_classifier:
             out_string += f" | Class Loss: {losses['latent_cls']} | Train Accuracy: {round(correct/total, 4)}"
 
-        if args.add_img_classifier:
+        if args.add_img_classifier or args.pretrain_img_classifier:
             out_string += f" | Img Class Loss: {losses['img_cls']} | Image Class Acc: {round(img_correct/total, 4)}"
 
         logger.log(out_string)
