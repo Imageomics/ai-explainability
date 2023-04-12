@@ -7,8 +7,6 @@ Authors: Patrick Esser, Robin Rombach, Björn Ommer
 import torch
 import torch.nn as nn
 import numpy as np
-from edflow.util import retrieve, get_obj_from_str
-
 
 class Shuffle(nn.Module):
     def __init__(self, in_channels, **kwargs):
@@ -177,16 +175,15 @@ class EfficientVRNVP(nn.Module):
 
 
 class VectorTransformer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, in_channel, n_flow, hidden_depth, hidden_dim):
         super().__init__()
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
-        self.config = config
 
-        self.in_channel = retrieve(config, "Transformer/in_channel")
-        self.n_flow = retrieve(config, "Transformer/n_flow")
-        self.depth_submodules = retrieve(config, "Transformer/hidden_depth")
-        self.hidden_dim = retrieve(config, "Transformer/hidden_dim")
+        self.in_channel = in_channel
+        self.n_flow = n_flow
+        self.depth_submodules = hidden_depth
+        self.hidden_dim = hidden_dim
         modules = [VectorActNorm, DoubleVectorCouplingBlock, Shuffle]
         self.realnvp = EfficientVRNVP(modules, self.in_channel, self.n_flow, self.hidden_dim,
                                    hidden_depth=self.depth_submodules)
@@ -204,10 +201,10 @@ class VectorTransformer(nn.Module):
 
 
 class FactorTransformer(VectorTransformer):
-    def __init__(self, config):
-        super().__init__(config)
-        self.n_factors = retrieve(config, "Transformer/n_factors", default=2)
-        self.factor_config = retrieve(config, "Transformer/factor_config", default=list())
+    def __init__(self, in_channel, n_flow, hidden_depth, hidden_dim, n_factors=2, factor_config=list()):
+        super().__init__(in_channel, n_flow, hidden_depth, hidden_dim)
+        self.n_factors = n_factors
+        self.factor_config = factor_config
 
     def forward(self, input):
         out, logdet = super().forward(input)

@@ -8,7 +8,6 @@ import functools
 import torch.nn as nn
 import torch
 import numpy as np
-from edflow.util import retrieve
 
 
 class ActNorm(nn.Module):
@@ -294,17 +293,17 @@ class Distribution(object):
 
 
 class Model(nn.Module):
-    def __init__(self, config):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic):
         super().__init__()
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
-        n_down = retrieve(config, "Model/n_down")
-        z_dim = retrieve(config, "Model/z_dim")
-        in_size = retrieve(config, "Model/in_size")
+        n_down = n_down
+        z_dim = z_dim
+        in_size = in_size
         bottleneck_size = in_size // 2**n_down
-        in_channels = retrieve(config, "Model/in_channels")
-        norm = retrieve(config, "Model/norm")
-        self.be_deterministic = retrieve(config, "Model/deterministic")
+        in_channels = in_channels
+        norm = norm
+        self.be_deterministic = deterministic
 
         self.feature_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
