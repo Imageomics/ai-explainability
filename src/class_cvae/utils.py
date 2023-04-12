@@ -130,7 +130,7 @@ def save_tensor_as_graph(ten, output="tensor_graph.png"):
 
 def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
     diffs = (org_img_recon - imgs_recon)
-    loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
+    loss = nn.L1Loss()(diffs, torch.zeros_like(diffs).cuda())
     return loss
 
 def get_hardcode_mnist_latent_map():
