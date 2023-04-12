@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Compose, Resize
 
 from PIL import Image
 
@@ -24,8 +24,12 @@ Goal: Train a variational autoencoder with a classification head on the latent s
 """
 
 def load_data(batch_size):
-    train_dset = MNIST(root="data", train=True, transform=ToTensor(), download=True)
-    test_dset = MNIST(root="data", train=False, transform=ToTensor())
+    transform = Compose([
+        Resize((32, 32)),
+        ToTensor()
+    ])
+    train_dset = MNIST(root="data", train=True, transform=transform, download=True)
+    test_dset = MNIST(root="data", train=False, transform=transform)
     train_dloader = DataLoader(train_dset, batch_size=batch_size, shuffle=True)
     test_dloader = DataLoader(test_dset, batch_size=batch_size, shuffle=False)
 
@@ -162,14 +166,12 @@ if __name__ == "__main__":
     iin_ae.cuda()
     classifier.cuda()
 
-    iin_ae.apply(init_weights)
     classifier.apply(init_weights)
     img_classifier.apply(init_weights)
 
     normal_loss_fn = nn.L1Loss()
-    recon_loss_fn = nn.L1Loss()
-    if args.use_handcraft:
-        recon_loss_fn = LPIPS()
+    def recon_loss_fn(s, t): 
+        return nn.L1Loss()(s, t) + LPIPS()(s, t)
     class_loss_fn = nn.CrossEntropyLoss()
     params = list(iin_ae.parameters())
     if args.add_classifier:
@@ -216,15 +218,16 @@ if __name__ == "__main__":
             if args.force_disentanglement:
                 z_force = create_z_from_label(lbls)
                 reg = nn.L1Loss()(z[:, :7], z_force)
+                losses["disentangle"] += reg.item()
                 loss += reg * args.force_dis_lambda
 
-            normal_loss = z_dist.kl()
+            normal_loss = z_dist.kl().mean()
             losses["normal"] += normal_loss.item()
             loss += normal_loss * args.normal_lambda
 
-            sparcity_loss = nn.L1Loss()(z, torch.zeros_like(z)) * args.l1_lambda
-            losses["sparcity"] += sparcity_loss
-            loss += sparcity_loss
+            sparcity_loss = nn.L1Loss()(z, torch.zeros_like(z))
+            losses["sparcity"] += sparcity_loss.item()
+            loss += sparcity_loss * args.l1_lambda
 
             total += len(imgs)
 
@@ -261,6 +264,8 @@ if __name__ == "__main__":
             optimizer.step()
 
             losses["all"] += loss.item()
+
+            save_imgs(imgs, imgs_recon, logger.get_path())
 
         for key in losses:
             losses[key] = round(losses[key] / len(train_dloader), 4)
