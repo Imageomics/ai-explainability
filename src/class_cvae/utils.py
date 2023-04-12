@@ -1,6 +1,7 @@
 import random
 
 import torch
+import torch.nn as nn
 import numpy as np
 
 from PIL import Image, ImageDraw
@@ -107,3 +108,16 @@ def save_imgs(reals, fakes, confs, org_confs, output):
     final = np.concatenate((final, tmp), axis=0)[:, :, :1].astype(np.uint8)
 
     Image.fromarray(final[:, :, 0]).save(output)
+
+
+def init_weights(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv2d') != -1 or classname.find('ConvTranspose2d') != -1:
+        nn.init.kaiming_uniform_(m.weight)
+        nn.init.zeros_(m.bias)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight, 1.0, 0.02)
+        nn.init.zeros_(m.bias)
+    elif classname.find('Linear') != -1:
+        nn.init.xavier_normal_(m.weight)
+        nn.init.zeros_(m.bias)
