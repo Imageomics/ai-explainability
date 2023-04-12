@@ -179,6 +179,7 @@ if __name__ == "__main__":
             loss = min_loss_fn(z_chg, torch.zeros_like(z_chg).cuda())
 
         loss *= args.z_lambda
+        z_edit = torch.clamp(z_edit, 0, 1)
         imgs_recon = iin_ae.decode(z_edit)
         if args.optimize_on_img_cls:
             if args.reinput:
