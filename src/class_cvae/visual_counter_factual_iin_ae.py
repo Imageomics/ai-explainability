@@ -11,9 +11,6 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor, Compose, Resize
 
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.pyplot as plt
-
 from models import Classifier, ImageClassifier
 from iin_models.ae import IIN_AE
 
@@ -170,12 +167,11 @@ if __name__ == "__main__":
                 z_edit = z + delta
             loss = min_loss_fn(sig_z_chg, torch.zeros_like(z_chg).cuda())
         else:
-            sig_z_chg = (nn.Sigmoid()(z_chg) * 2) - 1
             if args.force_disentanglement:
                 z_edit = z.clone()
-                z_edit[:, :7, 0, 0] += sig_z_chg.unsqueeze(0).repeat(args.batch_size, 1)
+                z_edit[:, :7, 0, 0] += z_chg.unsqueeze(0).repeat(args.batch_size, 1)
             else:
-                z_edit = z + sig_z_chg.unsqueeze(0).repeat(args.batch_size, 1)
+                z_edit = z + z_chg.unsqueeze(0).repeat(args.batch_size, 1)
             loss = min_loss_fn(z_chg, torch.zeros_like(z_chg).cuda())
 
         loss *= args.z_lambda
@@ -222,7 +218,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             if (epoch+1) % 1000 == 0:
                 if args.force_disentanglement:
-                    save_tensor_as_graph(sig_z_chg, "tmp/z_chg.png")
+                    save_tensor_as_graph(z_chg, "tmp/z_chg.png")
                 else:
                     save_tensor_as_graph(z_chg, "tmp/z_chg.png")
                 save_tensor_as_graph(z_edit[0, :, 0, 0], "tmp/z_edit.png")
