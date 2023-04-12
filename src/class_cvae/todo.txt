@@ -4,7 +4,8 @@ Features:
         o Test usability of code on this project
 
 Experiments:
-    O Manually edit delta vector and observe changes
+    X Manually edit delta vector and observe changes
         - Observe changes
-    O After learning the delta vector, threshold values > 1 to 1 and < -1 to -1, and others to 0
+    X After learning the delta vector, threshold values > 1 to 1 and < -1 to -1, and others to 0
+        - Switched task to pass the z-change vector through a sigmoid to obtain this result.
         - Observe changes

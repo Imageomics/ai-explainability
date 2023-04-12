@@ -16,22 +16,11 @@ from models import Encoder, Decoder, Classifier, ImageClassifier, SimpleEncoder,
 from logger import Logger
 from lpips.lpips import LPIPS
 
+from utils import init_weights, get_hardcode_mnist_latent_map, create_z_from_label
+
 """
 Goal: Train a variational autoencoder with a classification head on the latent space.
 """
-
-def init_weights(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv2d') != -1 or classname.find('ConvTranspose2d') != -1:
-        nn.init.kaiming_uniform_(m.weight)
-        nn.init.zeros_(m.bias)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight, 1.0, 0.02)
-        nn.init.zeros_(m.bias)
-    elif classname.find('Linear') != -1:
-        nn.init.xavier_normal_(m.weight)
-        nn.init.zeros_(m.bias)
-
 
 def load_data(batch_size):
     train_dset = MNIST(root="data", train=True, transform=ToTensor(), download=True)
@@ -152,26 +141,6 @@ def get_args():
     parser.add_argument('--exp_name', type=str, default="debug")
     parser.add_argument('--num_features', type=int, default=20)
     return parser.parse_args()
-
-def create_z_from_label(lbls):
-    z_map = {
-        0: np.array([[1, 0, 1, 1, 1, 1, 1]]),
-        1: np.array([[0, 0, 0, 0, 1, 0, 1]]),
-        2: np.array([[1, 1, 1, 0, 1, 1, 0]]),
-        3: np.array([[1, 1, 1, 0, 1, 0, 1]]),
-        4: np.array([[0, 1, 0, 1, 1, 0, 1]]),
-        5: np.array([[1, 0, 1, 1, 0, 0, 1]]),
-        6: np.array([[1, 1, 1, 1, 0, 1, 1]]),
-        7: np.array([[1, 0, 0, 0, 1, 0, 1]]),
-        8: np.array([[1, 1, 1, 1, 1, 1, 1]]),
-        9: np.array([[1, 1, 0, 1, 1, 0, 1]]),
-    }
-
-    z = z_map[lbls[0].item()]
-    for i in range(1, len(lbls)):
-        z = np.concatenate((z, z_map[lbls[i].item()]), axis=0)
-
-    return torch.tensor(z).cuda()
 
 if __name__ == "__main__":
     args = get_args()
