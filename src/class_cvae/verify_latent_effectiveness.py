@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 from models import Encoder, Decoder, Classifier, ImageClassifier
-from utils import create_img_from_text, save_imgs, MaxQueue, set_seed, save_tensor_as_graph
+from utils import create_img_from_text, save_imgs, MaxQueue, set_seed, save_tensor_as_graph, get_hardcode_mnist_latent_map
 
 def load_data():
     test_dset = MNIST(root="data", train=False, transform=ToTensor())
@@ -50,24 +50,8 @@ def get_args():
 
     return parser.parse_args()
 
-def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
-    diffs = (org_img_recon - imgs_recon)
-    loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
-    return loss
-
 def get_chg_vec(src_lbl, tgt_lbl):
-    z_map = {
-        0: np.array([[1, 0, 1, 1, 1, 1, 1]]),
-        1: np.array([[0, 0, 0, 0, 1, 0, 1]]),
-        2: np.array([[1, 1, 1, 0, 1, 1, 0]]),
-        3: np.array([[1, 1, 1, 0, 1, 0, 1]]),
-        4: np.array([[0, 1, 0, 1, 1, 0, 1]]),
-        5: np.array([[1, 0, 1, 1, 0, 0, 1]]),
-        6: np.array([[1, 1, 1, 1, 0, 1, 1]]),
-        7: np.array([[1, 0, 0, 0, 1, 0, 1]]),
-        8: np.array([[1, 1, 1, 1, 1, 1, 1]]),
-        9: np.array([[1, 1, 0, 1, 1, 0, 1]]),
-    }
+    z_map = get_hardcode_mnist_latent_map()
 
     return torch.tensor(z_map[tgt_lbl.item()] - z_map[src_lbl.item()]).cuda() 
 

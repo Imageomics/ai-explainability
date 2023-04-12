@@ -43,11 +43,6 @@ def get_args():
 
     return parser.parse_args()
 
-def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
-    diffs = (org_img_recon - imgs_recon)
-    loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
-    return loss
-
 if __name__ == "__main__":
     set_seed()
     args = get_args()

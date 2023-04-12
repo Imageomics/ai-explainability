@@ -127,3 +127,22 @@ def save_tensor_as_graph(ten, output="tensor_graph.png"):
     plt.bar(np.arange(len(z)), z)
     plt.savefig(output)
     plt.close()
+
+def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
+    diffs = (org_img_recon - imgs_recon)
+    loss = min_loss_fn(diffs, torch.zeros_like(diffs).cuda())
+    return loss
+
+def get_hardcode_mnist_latent_map():
+    return {
+        0: np.array([[1, 0, 1, 1, 1, 1, 1]]),
+        1: np.array([[0, 0, 0, 0, 1, 0, 1]]),
+        2: np.array([[1, 1, 1, 0, 1, 1, 0]]),
+        3: np.array([[1, 1, 1, 0, 1, 0, 1]]),
+        4: np.array([[0, 1, 0, 1, 1, 0, 1]]),
+        5: np.array([[1, 0, 1, 1, 0, 0, 1]]),
+        6: np.array([[1, 1, 1, 1, 0, 1, 1]]),
+        7: np.array([[1, 0, 0, 0, 1, 0, 1]]),
+        8: np.array([[1, 1, 1, 1, 1, 1, 1]]),
+        9: np.array([[1, 1, 0, 1, 1, 0, 1]]),
+    }
