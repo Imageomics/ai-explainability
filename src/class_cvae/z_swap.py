@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 from models import Encoder, Decoder, Classifier, ImageClassifier
-from utils import create_img_from_text, save_imgs
+from utils import create_img_from_text, save_imgs, set_seed
 
 
 """
@@ -42,12 +42,6 @@ def get_args():
     parser.add_argument('--num_features', type=int, default=20)
 
     return parser.parse_args()
-
-
-def set_seed(seed=2023):
-    torch.manual_seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
 
 def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
     diffs = (org_img_recon - imgs_recon)

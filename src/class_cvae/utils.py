@@ -1,3 +1,4 @@
+import random
 
 import torch
 import numpy as np
@@ -24,6 +25,11 @@ class MaxQueue:
         for z, _ in self.arr:
             acc += z
         return acc / len(self.arr)
+
+def set_seed(seed=2023):
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
 def create_img_from_text(width, height, text):
     PAD = 2
