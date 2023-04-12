@@ -146,3 +146,12 @@ def get_hardcode_mnist_latent_map():
         8: np.array([[1, 1, 1, 1, 1, 1, 1]]),
         9: np.array([[1, 1, 0, 1, 1, 0, 1]]),
     }
+
+def create_z_from_label(lbls):
+    z_map = get_hardcode_mnist_latent_map()
+
+    z = z_map[lbls[0].item()]
+    for i in range(1, len(lbls)):
+        z = np.concatenate((z, z_map[lbls[i].item()]), axis=0)
+
+    return torch.tensor(z).cuda()
