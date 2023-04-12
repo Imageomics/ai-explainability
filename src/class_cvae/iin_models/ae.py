@@ -233,7 +233,7 @@ class ImageLayer(nn.Module):
         x = input
         for layer in self.sub_layers:
             x = layer(x)
-        return x
+        return (x + 1)/2
 
     def build(self):
         FinalActivate = lambda: torch.nn.Tanh()

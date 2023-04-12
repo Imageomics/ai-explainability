@@ -11,9 +11,6 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor, Compose, Resize
 
-from PIL import Image, ImageDraw, ImageFont
-import matplotlib.pyplot as plt
-
 from models import Classifier, ImageClassifier
 from iin_models.ae import IIN_AE
 
@@ -104,6 +101,7 @@ if __name__ == "__main__":
     img_classifier.eval()
 
     sm = nn.Softmax(dim=1)
+    sigmoid = nn.Sigmoid()
 
     chg_path = None
     if args.restrict_path:
@@ -114,12 +112,12 @@ if __name__ == "__main__":
         with torch.no_grad():
             for img, lbl in test_dset:
                 if lbl == args.src_lbl:
-                    z_a = iin_ae.encode(img.cuda().unsqueeze(0)).sample()
+                    z_a = sigmoid(iin_ae.encode(img.cuda().unsqueeze(0)).sample())
                     out = classifier(z_a)
                     conf = sm(out)[0, args.src_lbl].item()
                     a_q.add(z_a, conf)
                 elif lbl == args.tgt_lbl:
-                    z_b = iin_ae.encode(img.cuda().unsqueeze(0)).sample()
+                    z_b = sigmoid(iin_ae.encode(img.cuda().unsqueeze(0)).sample())
                     out = classifier(z_b)
                     conf = sm(out)[0, args.tgt_lbl].item()
                     b_q.add(z_b, conf)
@@ -148,14 +146,14 @@ if __name__ == "__main__":
     org_confs = None
     if args.no_sample:
         with torch.no_grad():
-            z = iin_ae.encode(org_img).sample()
+            z = sigmoid(iin_ae.encode(org_img).sample())
 
     for epoch in range(args.num_iters):
         org_img_recon = None
 
         if not args.no_sample:
             with torch.no_grad():
-                z = iin_ae.encode(org_img).sample()
+                z = sigmoid(iin_ae.encode(org_img).sample())
         if chg_path is not None:
             chg_path = (b - z)
             if args.force_disentanglement:
@@ -169,19 +167,19 @@ if __name__ == "__main__":
                 z_edit = z + delta
             loss = min_loss_fn(sig_z_chg, torch.zeros_like(z_chg).cuda())
         else:
-            sig_z_chg = (nn.Sigmoid()(z_chg) * 2) - 1
             if args.force_disentanglement:
                 z_edit = z.clone()
-                z_edit[:, :7, 0, 0] += sig_z_chg.unsqueeze(0).repeat(args.batch_size, 1)
+                z_edit[:, :7, 0, 0] += z_chg.unsqueeze(0).repeat(args.batch_size, 1)
             else:
-                z_edit = z + sig_z_chg.unsqueeze(0).repeat(args.batch_size, 1)
+                z_edit = z + z_chg.unsqueeze(0).repeat(args.batch_size, 1)
             loss = min_loss_fn(z_chg, torch.zeros_like(z_chg).cuda())
 
         loss *= args.z_lambda
+        z_edit = torch.clamp(z_edit, 0, 1)
         imgs_recon = iin_ae.decode(z_edit)
         if args.optimize_on_img_cls:
             if args.reinput:
-                imgs_recon = iin_ae.decode(iin_ae.encode(imgs_recon).sample())
+                imgs_recon = iin_ae.decode(sigmoid(iin_ae.encode(imgs_recon).sample()))
             out = img_classifier(resize(imgs_recon))
             out_org = img_classifier(resize(org_img))
         else:
@@ -220,7 +218,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             if (epoch+1) % 1000 == 0:
                 if args.force_disentanglement:
-                    save_tensor_as_graph(sig_z_chg, "tmp/z_chg.png")
+                    save_tensor_as_graph(z_chg, "tmp/z_chg.png")
                 else:
                     save_tensor_as_graph(z_chg, "tmp/z_chg.png")
                 save_tensor_as_graph(z_edit[0, :, 0, 0], "tmp/z_edit.png")
