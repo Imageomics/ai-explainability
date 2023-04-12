@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from models import Encoder, Decoder, Classifier, ImageClassifier
 
-from utils import create_img_from_text, save_imgs
+from utils import create_img_from_text, save_imgs, MaxQueue
 
 """
 Goal: Create visual counterfactual
@@ -61,27 +61,6 @@ def set_seed(seed=2023):
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-
-class MaxQueue:
-    def __init__(self, size=10):
-        self.size = 10
-        self.arr = []
-
-    def add(self, z, conf):
-        if len(self.arr) < self.size:
-            self.arr.append((z, conf))
-        else:
-            if len(list(filter(lambda x: x[1] < conf, self.arr))) > 0:
-                self.arr.pop(0)
-                self.arr.append((z, conf))
-
-        self.arr = sorted(self.arr, key=lambda x: x[1])
-
-    def avg_val(self):
-        acc = torch.zeros_like(self.arr[0][0])
-        for z, _ in self.arr:
-            acc += z
-        return acc / len(self.arr)
 
 def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
     diffs = (org_img_recon - imgs_recon)

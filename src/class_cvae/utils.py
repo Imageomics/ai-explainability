@@ -1,4 +1,30 @@
 
+import torch
+import numpy as np
+
+from PIL import Image, ImageDraw
+
+class MaxQueue:
+    def __init__(self, size=10):
+        self.size = 10
+        self.arr = []
+
+    def add(self, z, conf):
+        if len(self.arr) < self.size:
+            self.arr.append((z, conf))
+        else:
+            if len(list(filter(lambda x: x[1] < conf, self.arr))) > 0:
+                self.arr.pop(0)
+                self.arr.append((z, conf))
+
+        self.arr = sorted(self.arr, key=lambda x: x[1])
+
+    def avg_val(self):
+        acc = torch.zeros_like(self.arr[0][0])
+        for z, _ in self.arr:
+            acc += z
+        return acc / len(self.arr)
+
 def create_img_from_text(width, height, text):
     PAD = 2
     img_size = img.shape[:2]
