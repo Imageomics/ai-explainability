@@ -232,7 +232,7 @@ if __name__ == "__main__":
             loss = recon_loss * args.recon_lambda
             
             recon_loss_zero = recon_loss_fn(imgs, imgs_recon_zero_reg)
-            losses["recon_zero_reg"] += recon_loss_zero.item()
+            losses["zero_reg_recon"] += recon_loss_zero.item()
             loss = recon_loss * args.recon_zero_lambda
 
             if args.force_disentanglement:
@@ -292,7 +292,7 @@ if __name__ == "__main__":
         for key in losses:
             losses[key] = round(losses[key] / len(train_dloader), 4)
 
-        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Disentangle Loss: {losses['disentangle']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Zero Recon Loss: {losses['recon_reg_zero']} | Sparsity Loss: {losses['sparcity']}"
+        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Disentangle Loss: {losses['disentangle']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Zero Recon Loss: {losses['zero_reg_recon']} | Sparsity Loss: {losses['sparcity']}"
         if args.add_classifier:
             out_string += f" | Class Loss: {losses['latent_cls']} | Train Accuracy: {round(correct/total, 4)}"
 
