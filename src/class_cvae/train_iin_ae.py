@@ -138,9 +138,9 @@ def get_args():
     parser.add_argument('--pretrain_img_classifier', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--warm_up_epochs', type=int, default=3)
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--recon_lambda', type=float, default=1)
+    parser.add_argument('--recon_zero_lambda', type=float, default=1)
     parser.add_argument('--cls_lambda', type=float, default=0.1)
     parser.add_argument('--img_cls_lambda', type=float, default=0.1)
     parser.add_argument('--normal_lambda', type=float, default=0.001)
@@ -197,11 +197,13 @@ if __name__ == "__main__":
     for epoch in range(args.epochs):
         losses = {
             "recon" : 0,
+            "zero_reg_recon" : 0,
             "latent_cls" : 0,
             "sparcity" : 0,
             "normal" : 0,
             "disentangle" : 0,
             "img_cls" : 0,
+            "img_cls_zero" : 0,
             "all" : 0
         }
         total = 0
@@ -222,14 +224,16 @@ if __name__ == "__main__":
             z = nn.Sigmoid()(z_dist.sample())
             z_force = create_z_from_label(lbls).float()
             z_force = z_force.unsqueeze(2).unsqueeze(3)
-            if epoch < args.warm_up_epochs:
-                imgs_recon = iin_ae.decode(torch.cat((z_force, torch.zeros_like(z[:, 7:, :, :])), 1))
-            else:
-                imgs_recon = iin_ae.decode(z)
+            imgs_recon_zero_reg = iin_ae.decode(torch.cat((z_force, torch.zeros_like(z[:, 7:, :, :])), 1))
+            imgs_recon = iin_ae.decode(z)
 
             recon_loss = recon_loss_fn(imgs, imgs_recon)
             losses["recon"] += recon_loss.item()
             loss = recon_loss * args.recon_lambda
+            
+            recon_loss_zero = recon_loss_fn(imgs, imgs_recon_zero_reg)
+            losses["recon_zero_reg"] += recon_loss_zero.item()
+            loss = recon_loss * args.recon_zero_lambda
 
             if args.force_disentanglement:
                 reg = nn.L1Loss()(z[:, :7], z_force)
@@ -269,6 +273,12 @@ if __name__ == "__main__":
                 _, img_preds = torch.max(out, dim=1)
 
                 img_correct += (img_preds == lbls).sum().item()
+                
+                out = img_classifier(resize(imgs_recon_zero_reg))
+
+                img_cls_loss_zero = class_loss_fn(out, lbls)
+                losses["img_cls_zero"] += img_cls_loss_zero.item()
+                loss += img_cls_loss_zero * args.img_cls_lambda
 
 
             optimizer.zero_grad()
@@ -282,12 +292,12 @@ if __name__ == "__main__":
         for key in losses:
             losses[key] = round(losses[key] / len(train_dloader), 4)
 
-        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Disentangle Loss: {losses['disentangle']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Sparsity Loss: {losses['sparcity']}"
+        out_string = f"Epoch: {epoch+1} | Total Loss: {losses['all']} | Disentangle Loss: {losses['disentangle']} | Normal Loss: {losses['normal']} | Recon Loss: {losses['recon']} | Zero Recon Loss: {losses['recon_reg_zero']} | Sparsity Loss: {losses['sparcity']}"
         if args.add_classifier:
             out_string += f" | Class Loss: {losses['latent_cls']} | Train Accuracy: {round(correct/total, 4)}"
 
         if args.add_img_classifier or args.pretrain_img_classifier:
-            out_string += f" | Img Class Loss: {losses['img_cls']} | Image Class Acc: {round(img_correct/total, 4)}"
+            out_string += f" | Img Class Loss: {losses['img_cls']} | Img Class Zero Loss: {losses['img_cls_zero']} | Image Class Acc: {round(img_correct/total, 4)}"
 
         logger.log(out_string)
 
