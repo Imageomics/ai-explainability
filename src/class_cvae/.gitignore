@@ -4,3 +4,4 @@ output_recon/
 tmp/
 *.png
 *.out
+.idea/
