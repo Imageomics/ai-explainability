@@ -50,7 +50,8 @@ def get_args():
     parser.add_argument('--num_iters', type=int, default=1000)
     parser.add_argument('--loss_fn', type=str, default='l1', choices=['l1', 'l2'])
     parser.add_argument('--cls_loss_fn', type=str, default='cel', choices=['cel', 'custom'])
-    parser.add_argument('--output', type=str, default="tmp/vcf.png")
+    parser.add_argument('--output_dir', type=str, default="tmp/")
+    parser.add_argument('--exp_name', type=str, default="vcf")
     parser.add_argument('--cls_lambda', type=float, default=1.0)
     parser.add_argument('--z_lambda', type=float, default=1.0)
     parser.add_argument('--reg_on_image', action="store_true", default=False)
@@ -218,12 +219,12 @@ if __name__ == "__main__":
         with torch.no_grad():
             if (epoch+1) % 1000 == 0:
                 if args.force_disentanglement:
-                    save_tensor_as_graph(z_chg, "tmp/z_chg.png")
+                    save_tensor_as_graph(z_chg, os.path.join(args.output_dir, args.exp_name + "_z_chg.png"))
                 else:
-                    save_tensor_as_graph(z_chg, "tmp/z_chg.png")
-                save_tensor_as_graph(z_edit[0, :, 0, 0], "tmp/z_edit.png")
-                save_tensor_as_graph(z[0, :, 0, 0], "tmp/z.png")
+                    save_tensor_as_graph(z_chg, os.path.join(args.output_dir, args.exp_name + "_z_chg.png"))
+                save_tensor_as_graph(z_edit[0, :, 0, 0], os.path.join(args.output_dir, args.exp_name + "_z_edit.png"))
+                save_tensor_as_graph(z[0, :, 0, 0], os.path.join(args.output_dir, args.exp_name + "_z_chg.png"))
             if org_img_recon is None:
                 org_img_recon = iin_ae.decode(z)
 
-            save_imgs(org_img_recon, imgs_recon, confs, org_confs, args.output)
+            save_imgs(org_img_recon, imgs_recon, confs, org_confs, os.path.join(args.output_dir, args.exp_name + ".png"))
