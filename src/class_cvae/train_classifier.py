@@ -2,6 +2,7 @@
 Train latent classifier on given VAE model
 """
 
+from tqdm import tqdm
 from argparse import ArgumentParser
 
 import numpy as np
@@ -18,7 +19,7 @@ from PIL import Image
 from models import ImageClassifier, ResNet50
 from logger import Logger
 
-def load_data():
+def load_data(batch_size):
     train_transform = Compose([
         RandomRotation(45),
         ToTensor()
@@ -29,8 +30,8 @@ def load_data():
     ])
     train_dset = MNIST(root="data", train=True, transform=train_transform, download=True)
     test_dset = MNIST(root="data", train=False, transform=test_transform)
-    train_dloader = DataLoader(train_dset, batch_size=4, shuffle=True)
-    test_dloader = DataLoader(test_dset, batch_size=4, shuffle=False)
+    train_dloader = DataLoader(train_dset, batch_size=batch_size, shuffle=True)
+    test_dloader = DataLoader(test_dset, batch_size=batch_size, shuffle=False)
 
     return train_dloader, test_dloader
 
@@ -38,6 +39,7 @@ def get_args():
     parser = ArgumentParser()
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--use_resnet', action="store_true", default=False)
     parser.add_argument('--exp_name', type=str, default="img_classifier")
@@ -46,7 +48,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    train_dloader, test_dloader = load_data()
+    train_dloader, test_dloader = load_data(args.batch_size)
 
     classifier = ImageClassifier(10)
     if args.use_resnet:
@@ -68,7 +70,7 @@ if __name__ == "__main__":
         correct = 0
         total = 0
         classifier.train()
-        for imgs, lbls in train_dloader:
+        for (imgs, lbls) in tqdm(train_dloader):
             imgs = imgs.cuda()
             lbls = lbls.cuda()
 
