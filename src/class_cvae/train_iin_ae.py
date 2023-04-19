@@ -180,7 +180,8 @@ if __name__ == "__main__":
     classifier.cuda()
 
     classifier.apply(init_weights)
-    img_classifier.apply(init_weights)
+    if not args.use_resnet:
+        img_classifier.apply(init_weights)
 
     normal_loss_fn = nn.L1Loss()
     def recon_loss_fn(s, t): 
