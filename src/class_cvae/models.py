@@ -8,7 +8,7 @@ class ResNet50(nn.Module):
     def __init__(self, pretrain=True, num_classes=10):
         super().__init__()
         model_resnet = models.resnet50(pretrained=pretrain)
-        self.conv1 = model_resnet.conv1
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = model_resnet.bn1
         self.relu = model_resnet.relu
         self.maxpool = model_resnet.maxpool
