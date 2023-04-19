@@ -11,10 +11,10 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor, Compose, Resize
 
-from models import Classifier, ImageClassifier
+from models import Classifier, ImageClassifier, ResNet50
 from iin_models.ae import IIN_AE
 
-from utils import create_img_from_text, save_imgs, MaxQueue, set_seed, save_tensor_as_graph, calc_img_diff_loss
+from utils import save_imgs, MaxQueue, set_seed, save_tensor_as_graph, calc_img_diff_loss
 
 """
 Goal: Create visual counterfactual
@@ -46,6 +46,7 @@ def get_args():
     parser.add_argument('--no_sample', action="store_true", default=False)
     parser.add_argument('--force_disentanglement', action="store_true", default=False)
     parser.add_argument('--reinput', action="store_true", default=False)
+    parser.add_argument('--use_resnet', action="store_true", default=False)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--num_iters', type=int, default=1000)
     parser.add_argument('--loss_fn', type=str, default='l1', choices=['l1', 'l2'])
@@ -85,6 +86,8 @@ if __name__ == "__main__":
     if args.force_disentanglement:
         classifier = Classifier(7, 10)
     img_classifier = ImageClassifier(10)
+    if args.use_resnet:
+        img_classifier = ResNet50(num_classes=10)
     iin_ae.load_state_dict(torch.load(args.iin_ae))
     if args.classifier is not None:
         classifier.load_state_dict(torch.load(args.classifier))
