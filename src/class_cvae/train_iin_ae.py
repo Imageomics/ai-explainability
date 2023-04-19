@@ -12,7 +12,7 @@ from torchvision.transforms import ToTensor, Compose, Resize, RandomRotation
 
 from PIL import Image
 
-from models import Classifier, ImageClassifier
+from models import Classifier, ImageClassifier, ResNet50
 from iin_models.ae import IIN_AE
 from logger import Logger
 from lpips.lpips import LPIPS
@@ -134,6 +134,7 @@ def get_args():
     parser.add_argument('--add_classifier', action='store_true', default=False)
     parser.add_argument('--add_img_classifier', action='store_true', default=False)
     parser.add_argument('--force_disentanglement', action='store_true', default=False)
+    parser.add_argument('--use_resnet', action='store_true', default=False)
     parser.add_argument('--add_rotation', action='store_true', default=False)
     parser.add_argument('--pretrain_img_classifier', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=128)
@@ -164,6 +165,8 @@ if __name__ == "__main__":
     iin_ae = IIN_AE(4, args.num_features, 32, 1, 'an', False)
 
     img_classifier = ImageClassifier(10)
+    if args.use_resnet:
+        img_classifier = ResNet50(num_classes=10)
     total_params = 0
     total_params += sum(p.numel() for p in iin_ae.parameters() if p.requires_grad)
     total_params += sum(p.numel() for p in classifier.parameters() if p.requires_grad)
@@ -177,7 +180,8 @@ if __name__ == "__main__":
     classifier.cuda()
 
     classifier.apply(init_weights)
-    img_classifier.apply(init_weights)
+    if not args.use_resnet:
+        img_classifier.apply(init_weights)
 
     normal_loss_fn = nn.L1Loss()
     def recon_loss_fn(s, t): 

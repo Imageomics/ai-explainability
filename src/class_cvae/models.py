@@ -2,6 +2,39 @@ import math
 
 import torch
 import torch.nn as nn
+from torchvision import models
+
+class ResNet50(nn.Module):
+    def __init__(self, pretrain=True, num_classes=10):
+        super().__init__()
+        model_resnet = models.resnet50(pretrained=pretrain)
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = model_resnet.bn1
+        self.relu = model_resnet.relu
+        self.maxpool = model_resnet.maxpool
+        self.layer1 = model_resnet.layer1
+        self.layer2 = model_resnet.layer2
+        self.layer3 = model_resnet.layer3
+        self.layer4 = model_resnet.layer4
+        self.avgpool = model_resnet.avgpool
+        self.in_features = model_resnet.fc.in_features
+        self.linear = nn.Linear(self.in_features, num_classes)
+
+    def forward(self, x, compute_z=False):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.linear(x)
+
+        return x
+
 
 class ImageClassifier(nn.Module):
     def __init__(self, class_num=10):
