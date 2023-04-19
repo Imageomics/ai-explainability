@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Compose, RandomRotation
 
 from PIL import Image
 
@@ -19,8 +19,16 @@ from models import ImageClassifier
 from logger import Logger
 
 def load_data():
-    train_dset = MNIST(root="data", train=True, transform=ToTensor(), download=True)
-    test_dset = MNIST(root="data", train=False, transform=ToTensor())
+    train_transform = Compose([
+        RandomRotation(45),
+        ToTensor()
+    ])
+
+    test_transform = Compose([
+        ToTensor()
+    ])
+    train_dset = MNIST(root="data", train=True, transform=train_transform, download=True)
+    test_dset = MNIST(root="data", train=False, transform=test_transform)
     train_dloader = DataLoader(train_dset, batch_size=4, shuffle=True)
     test_dloader = DataLoader(test_dset, batch_size=4, shuffle=False)
 
