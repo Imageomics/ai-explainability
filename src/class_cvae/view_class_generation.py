@@ -7,7 +7,7 @@ from torchvision.transforms import Resize
 from PIL import Image
 
 from iin_models.ae import IIN_AE
-from models import ImageClassifier
+from models import ImageClassifier, ResNet50
 from utils import tensor_to_numpy_img, set_seed, save_tensor_as_graph, create_z_from_label
 
 """
@@ -23,6 +23,7 @@ def get_args():
     parser.add_argument('--img_classifier', type=str, default=None)
     parser.add_argument('--output_dir', type=str, default="tmp/")
     parser.add_argument('--exp_name', type=str, default="class_vcf")
+    parser.add_argument('--use_resnet', action="store_true", default=False)
     parser.add_argument('--num_features', type=int, default=20)
 
     return parser.parse_args()
@@ -39,6 +40,8 @@ if __name__ == "__main__":
     iin_ae.eval()
 
     img_classifier = ImageClassifier(10)
+    if args.use_resnet:
+        img_classifier = ResNet50(num_classes=10)
     img_classifier.load_state_dict(torch.load(args.img_classifier))
     img_classifier.cuda()
     img_classifier.eval()
