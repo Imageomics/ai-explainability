@@ -8,6 +8,7 @@ def get_args():
     parser.add_argument("--iin_ae", type=str, default="output/debug/iin_ae.pt")
     parser.add_argument("--img_classifier", type=str, default="output/debug/img_classifier.pt")
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--no_sample", action="store_true", default=False)
     parser.add_argument("--num_iters", type=int, default=10000)
     parser.add_argument("--num_features", type=int, default=20)
     parser.add_argument("--exp_name", type=str, default="all_cf")
@@ -33,6 +34,9 @@ if __name__ == "__main__":
                + f' --tgt_lbl {tgt_lbl}' + f' --num_iters {args.num_iters}' \
                + f' --output_dir {logger.get_path()}' + f' --exp_name {src_lbl}_to_{tgt_lbl}' \
                + ' --force_disentanglement' + f' --num_features {args.num_features}'
+        
+        if args.no_sample:
+            cmd += ' --no_sample'
         
         logger.log(cmd)
         output = os.popen(cmd)
