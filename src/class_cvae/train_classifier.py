@@ -15,7 +15,7 @@ from torchvision.transforms import ToTensor, Compose, RandomRotation
 
 from PIL import Image
 
-from models import ImageClassifier
+from models import ImageClassifier, ResNet50
 from logger import Logger
 
 def load_data():
@@ -39,6 +39,7 @@ def get_args():
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--output_dir', type=str, default="output")
+    parser.add_argument('--use_resnet', action="store_true", default=False)
     parser.add_argument('--exp_name', type=str, default="img_classifier")
     return parser.parse_args()
 
@@ -48,6 +49,8 @@ if __name__ == "__main__":
     train_dloader, test_dloader = load_data()
 
     classifier = ImageClassifier(10)
+    if args.use_resnet:
+        classifier = ResNet50(num_classes=10)
     total_params = 0
     total_params += sum(p.numel() for p in classifier.parameters() if p.requires_grad)
 
