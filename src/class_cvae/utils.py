@@ -44,12 +44,14 @@ def create_img_from_text(width, height, text):
 
     return text_img
 
-def save_imgs(reals, fakes, confs, org_confs, output):
-    reals = reals.cpu().detach().numpy()
-    fakes = fakes.cpu().detach().numpy()
+def tensor_to_numpy_img(x):
+    x = x.cpu().detach().numpy()
+    x = np.transpose(x, (0, 2, 3, 1)) * 255
+    return x.astype(np.uint8)
 
-    reals = np.transpose(reals, (0, 2, 3, 1)) * 255
-    fakes = np.transpose(fakes, (0, 2, 3, 1)) * 255
+def save_imgs(reals, fakes, confs, org_confs, output):
+    reals = tensor_to_numpy_img(reals).astype(np.float)
+    fakes = tensor_to_numpy_img(fakes).astype(np.float)
     diffs = (reals - fakes)
     diffs_pos = np.copy(diffs)
     diffs_pos[diffs_pos < 0] = 0
