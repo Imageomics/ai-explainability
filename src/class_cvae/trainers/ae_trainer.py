@@ -15,8 +15,11 @@ class AE_Trainer():
     def __init__(self, ae, img_classifier, lbls_to_att_fn, img_cls_resize_fn=None):
         self.ae = ae
         self.img_classifier = img_classifier
-        self.lbl_to_att_fn = lbls_to_att_fn
-        self.img_cls_resize_fn = lambda x: x if img_cls_resize_fn is None else img_cls_resize_fn
+        self.lbls_to_att_fn = lbls_to_att_fn
+        self.img_cls_resize_fn = img_cls_resize_fn 
+        if self.img_cls_resize_fn is None:
+            self.img_cls_resize_fn = lambda x: x 
+        self.num_att_vars = len(lbls_to_att_fn(torch.tensor([0]))[0])
 
     def init_stats(self):
         stats = {
@@ -35,18 +38,20 @@ class AE_Trainer():
             "correct" : 0
         }
 
+        return stats
+
     def compute_loss(self, imgs, lbls, stats, recon_lambda=1, recon_zero_lambda=1, \
                      cls_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001):
         l1_loss_fn = nn.L1Loss()
         lpips_loss_fn = LPIPS()
         class_loss_fn = nn.CrossEntropyLoss()
-        recon_loss = l1_loss_fn(imgs, imgs_recon) + lpips_loss_fn(imgs, imgs_recon)
 
         z = self.ae.encode(imgs)
         z_force = self.lbls_to_att_fn(lbls).float()
         imgs_recon_zero_reg = self.ae.decode(torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1))
         imgs_recon = self.ae.decode(z)
 
+        recon_loss = l1_loss_fn(imgs, imgs_recon) + lpips_loss_fn(imgs, imgs_recon)
         stats["losses"]["recon"] += recon_loss.item()
         loss = recon_loss * recon_lambda
         

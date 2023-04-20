@@ -46,7 +46,9 @@ def load_models(args):
         if not args.use_resnet:
             img_classifier.apply(init_weights)
 
-    img_classifier.load_state_dict(torch.load(args.pretrain_img_classifier))
+    img_classifier.load_state_dict(torch.load(args.img_classifier))
+
+    return iin_ae, img_classifier
 
 def get_args():
     parser = ArgumentParser()
@@ -65,6 +67,7 @@ def get_args():
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--exp_name', type=str, default="debug")
     parser.add_argument('--num_features', type=int, default=20)
+    parser.add_argument('--img_size', type=int, default=32)
     return parser.parse_args()
 
 if __name__ == "__main__":

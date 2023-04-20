@@ -13,13 +13,13 @@ class IIN_AE_Wrapper(nn.Module):
 
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
-        return nn.Sigmoid(self.dist.sample()[:, :, 0, 0])
+        return nn.Sigmoid()(self.dist.sample()[:, :, 0, 0])
     
     def decode(self, z):
-        x = self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))
+        return self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))
 
     def kl_loss(self):
-        self.dist.kl().mean()
+        return self.dist.kl().mean()
 
 class ResNet50(nn.Module):
     def __init__(self, pretrain=True, num_classes=10):
