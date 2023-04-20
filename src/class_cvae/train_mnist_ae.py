@@ -69,6 +69,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
+    assert args.img_classifier is not None
     ae, img_classifier = load_models(args)
     train_dloader, test_dloader = load_data(args)
 
