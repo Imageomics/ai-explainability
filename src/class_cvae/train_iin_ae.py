@@ -1,3 +1,4 @@
+import os
 from argparse import ArgumentParser
 
 from tqdm import tqdm
@@ -136,6 +137,7 @@ def get_args():
     parser.add_argument('--force_disentanglement', action='store_true', default=False)
     parser.add_argument('--use_resnet', action='store_true', default=False)
     parser.add_argument('--add_rotation', action='store_true', default=False)
+    parser.add_argument('--continue_checkpoint', action='store_true', default=False)
     parser.add_argument('--pretrain_img_classifier', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=100)
@@ -163,8 +165,13 @@ if __name__ == "__main__":
         classifier = Classifier(7, 10)
 
     iin_ae = IIN_AE(4, args.num_features, 32, 1, 'an', False)
-
     img_classifier = ImageClassifier(10)
+
+    if args.continue_checkpoint:
+        iin_ae.load_state_dict(torch.load(os.path.join(args.output_dir, args.exp_name, "iin_ae.pt")))
+        args.pretrain_img_classifier = os.path.join(args.output_dir, args.exp_name, "img_classifier.pt")
+        classifier.load_state_dict(torch.load(os.path.join(args.output_dir, args.exp_name, "classifier.pt")))
+
     if args.use_resnet:
         img_classifier = ResNet50(num_classes=10)
     total_params = 0
@@ -179,9 +186,10 @@ if __name__ == "__main__":
     iin_ae.cuda()
     classifier.cuda()
 
-    classifier.apply(init_weights)
-    if not args.use_resnet:
-        img_classifier.apply(init_weights)
+    if not args.continue_checkpoint:
+        classifier.apply(init_weights)
+        if not args.use_resnet:
+            img_classifier.apply(init_weights)
 
     normal_loss_fn = nn.L1Loss()
     def recon_loss_fn(s, t): 
