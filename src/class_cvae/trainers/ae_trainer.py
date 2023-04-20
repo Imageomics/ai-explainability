@@ -96,7 +96,7 @@ class AE_Trainer():
                 lbls = lbls.cuda()
 
                 z = self.ae.encode(imgs)
-                imgs_recon = self.ae.decode()
+                imgs_recon = self.ae.decode(z)
                 out = self.img_classifier(self.img_cls_resize_fn(imgs_recon))
 
                 _, preds = torch.max(out, dim=1)
@@ -108,7 +108,7 @@ class AE_Trainer():
                 self.save_imgs(imgs, imgs_recon, logger.get_path())
         return correct / total
 
-    def save_imgs(reals, fakes, output_dir):
+    def save_imgs(self, reals, fakes, output_dir):
         reals = tensor_to_numpy_img(reals).astype(np.float)
         fakes = tensor_to_numpy_img(fakes).astype(np.float)
 
@@ -161,7 +161,7 @@ class AE_Trainer():
                 optimizer.step()
 
             for key in stats["losses"]:
-                stats["losses"][key] = round(stats["losses"][key] / len(self.train_dloader), 4)
+                stats["losses"][key] = round(stats["losses"][key] / len(train_dloader), 4)
 
             out_string = f"Epoch: {epoch+1} | " \
                 + f"Total Loss: {stats['losses']['all']} | " \
