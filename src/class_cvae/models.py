@@ -4,6 +4,23 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+from iin_models.ae import IIN_AE
+
+class IIN_AE_Wrapper(nn.Module):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic):
+        super().__init__()
+        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic)
+
+    def encode(self, x):
+        self.dist = self.iin_ae.encode(x)
+        return nn.Sigmoid()(self.dist.sample()[:, :, 0, 0])
+    
+    def decode(self, z):
+        return self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))
+
+    def kl_loss(self):
+        return self.dist.kl().mean()
+
 class ResNet50(nn.Module):
     def __init__(self, pretrain=True, num_classes=10):
         super().__init__()
