@@ -4,13 +4,15 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 
+import numpy as np
+
 from PIL import Image
 
 from lpips.lpips import LPIPS
 from utils import tensor_to_numpy_img
 
 class AE_Trainer():
-    def __init__(self, ae, img_classifier, lbls_to_att_fn, img_cls_resize_fn):
+    def __init__(self, ae, img_classifier, lbls_to_att_fn, img_cls_resize_fn=None):
         self.ae = ae
         self.img_classifier = img_classifier
         self.lbl_to_att_fn = lbls_to_att_fn
@@ -33,7 +35,8 @@ class AE_Trainer():
             "correct" : 0
         }
 
-    def compute_loss(self, imgs, lbls, stats, recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001):
+    def compute_loss(self, imgs, lbls, stats, recon_lambda=1, recon_zero_lambda=1, \
+                     cls_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001):
         l1_loss_fn = nn.L1Loss()
         lpips_loss_fn = LPIPS()
         class_loss_fn = nn.CrossEntropyLoss()
@@ -78,12 +81,12 @@ class AE_Trainer():
 
         return loss
     
-    def eval(self, logger=None):
+    def eval(self, test_dloader, logger=None):
         correct = 0
         total = 0
         self.ae.eval()
         with torch.no_grad():
-            for imgs, lbls in self.test_dloader:
+            for imgs, lbls in test_dloader:
                 imgs = imgs.cuda()
                 lbls = lbls.cuda()
 
@@ -97,15 +100,13 @@ class AE_Trainer():
                 total += len(imgs)
 
             if logger:
-                save_imgs(imgs, imgs_recon)
+                self.save_imgs(imgs, imgs_recon, logger.get_path())
         return correct / total
 
     def save_imgs(reals, fakes, output_dir):
-        reals = reals.cpu().detach().numpy()
-        fakes = fakes.cpu().detach().numpy()
+        reals = tensor_to_numpy_img(reals).astype(np.float)
+        fakes = tensor_to_numpy_img(fakes).astype(np.float)
 
-        reals = np.transpose(reals, (0, 2, 3, 1)) * 255
-        fakes = np.transpose(fakes, (0, 2, 3, 1)) * 255
         final = None
         for img in reals:
             if final is None:
@@ -124,7 +125,9 @@ class AE_Trainer():
 
         Image.fromarray(final_img).save(f"{output_dir}/recon.png")
 
-    def train(self, epochs=100, lr=0.0001, logger=None):
+    def train(self, train_dloader, test_dloader, epochs=100, lr=0.0001, logger=None, \
+                recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, force_dis_lambda=1, \
+                sparcity_lambda=0.1, kl_lambda=0.001):
         def log(x):
             if logger is None:
                 return
@@ -141,11 +144,12 @@ class AE_Trainer():
             stats = self.init_stats()
             self.ae.train()
             
-            for imgs, lbls in tqdm(self.train_dloader, desc="Training"):
+            for imgs, lbls in tqdm(train_dloader, desc="Training"):
                 imgs = imgs.cuda()
                 lbls = lbls.cuda()
 
-                loss = self.compute_loss(imgs, lbls, stats)
+                loss = self.compute_loss(imgs, lbls, stats, recon_lambda, recon_zero_lambda, \
+                                         cls_lambda, force_dis_lambda, sparcity_lambda, kl_lambda)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -167,7 +171,7 @@ class AE_Trainer():
 
             log(out_string)
 
-            acc, in_imgs, out_recon = self.eval()
+            acc = self.eval(test_dloader, logger)
 
             log(f"Epoch: {epoch+1} | Test Accuracy: {round(acc, 4)}")
 
