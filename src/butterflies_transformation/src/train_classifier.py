@@ -2,10 +2,10 @@ from argparse import ArgumentParser
 
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Resize, Compose
 
 from options import load_config
-from datasets import CuthillDataset
+from datasets import CuthillDataset, MyersJiggins
 from models import VGG_Classifier
 from tools import init_weights
 
@@ -14,17 +14,27 @@ parser = ArgumentParser()
 parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--epochs", type=int, default=50)
 parser.add_argument("--lr", type=float, default=0.001)
+parser.add_argument("--dset", type=str, default="cuthill", choices=["cuthill", "myers-jiggins"])
 args = parser.parse_args()
 
-options = load_config('../configs/cuthill_train.yaml')
 
-dset = CuthillDataset(options, train=True, transform=ToTensor())
+if args.dset == "cuthill":
+    options = load_config('../configs/cuthill_train.yaml')
+    dset = CuthillDataset(options, train=True, transform=ToTensor())
+    test_dset = CuthillDataset(options, train=False, transform=ToTensor())
+elif args.dset == "myers-jiggins":
+    transforms = Compose([
+        Resize((512, 512)),
+        ToTensor()
+    ])
+    options = load_config('../configs/myers_jiggins_train.yaml')
+    dset = MyersJiggins(options, train=True, transform=transforms)
+    test_dset = MyersJiggins(options, train=False, transform=transforms)
+
 dloader = DataLoader(dset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-
-test_dset = CuthillDataset(options, train=False, transform=ToTensor())
 test_dloader = DataLoader(test_dset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-classifier = VGG_Classifier(class_num=18, pretrain=True).cuda()
+classifier = VGG_Classifier(class_num=dset.num_classes, pretrain=True).cuda()
 
 classifier.apply(init_weights)
 
