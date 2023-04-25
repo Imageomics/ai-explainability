@@ -22,10 +22,16 @@ class IIN_AE_Wrapper(nn.Module):
         return self.dist.kl().mean()
 
 class ResNet50(nn.Module):
-    def __init__(self, pretrain=True, num_classes=10):
+    def __init__(self, pretrain=True, num_classes=10, img_ch=1):
         super().__init__()
-        model_resnet = models.resnet50(pretrained=pretrain)
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        weights = None
+        if pretrain:
+            weights = models.ResNet50_Weights.IMAGENET1K_V2
+        model_resnet = models.resnet50(weights=weights)
+        if img_ch != 3:
+            self.conv1 = nn.Conv2d(img_ch, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        else:
+            self.conv1 = model_resnet.conv1
         self.bn1 = model_resnet.bn1
         self.relu = model_resnet.relu
         self.maxpool = model_resnet.maxpool
