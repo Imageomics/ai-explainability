@@ -54,8 +54,8 @@ def load_data(dset, batch_size, use_bbox=False):
         train_transform = T.Compose([
             T.Lambda(cub_pad),
             T.RandomOrder(flips_and_crop),
-            #T.RandomRotation(10),
-            #T.RandomPerspective(distortion_scale=0.25, p=0.5, interpolation=T.InterpolationMode.BILINEAR),
+            T.RandomRotation(10),
+            T.RandomPerspective(distortion_scale=0.25, p=0.5, interpolation=T.InterpolationMode.BILINEAR),
             #T.Resize((256, 256)),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
