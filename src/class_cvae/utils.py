@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from PIL import Image, ImageDraw, ImageFont
+from torchvision.transforms.functional import pad
 
 class MaxQueue:
     def __init__(self, size=10):
@@ -110,6 +111,20 @@ def save_imgs(reals, fakes, confs, org_confs, output):
     final = np.concatenate((final, tmp), axis=0)[:, :, :1].astype(np.uint8)
 
     Image.fromarray(final[:, :, 0]).save(output)
+
+def cub_pad(img):
+    pad_size = max(max(img.height, img.width), 500)
+    y_to_pad = pad_size - img.height
+    x_to_pad = pad_size - img.width
+
+    top_to_pad = y_to_pad // 2
+    bottom_to_pad = y_to_pad - top_to_pad
+    left_to_pad = x_to_pad // 2
+    right_to_pad = x_to_pad - left_to_pad
+
+    return pad(img,
+        (left_to_pad, top_to_pad, right_to_pad, bottom_to_pad),
+        fill=tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406))))
 
 def init_weights(m):
     classname = m.__class__.__name__
