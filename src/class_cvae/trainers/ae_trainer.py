@@ -12,11 +12,12 @@ from lpips.lpips import LPIPS
 from utils import tensor_to_numpy_img
 
 class AE_Trainer():
-    def __init__(self, ae, img_classifier, lbls_to_att_fn, img_cls_resize_fn=None):
+    def __init__(self, ae, img_classifier, lbls_to_att_fn, img_cls_resize_fn=None, unnormalize=None):
         self.ae = ae
         self.img_classifier = img_classifier
         self.lbls_to_att_fn = lbls_to_att_fn
         self.img_cls_resize_fn = img_cls_resize_fn 
+        self.unnormalize = unnormalize
         if self.img_cls_resize_fn is None:
             self.img_cls_resize_fn = lambda x: x 
         self.num_att_vars = len(lbls_to_att_fn(torch.tensor([0]))[0])
@@ -109,6 +110,10 @@ class AE_Trainer():
         return correct / total
 
     def save_imgs(self, reals, fakes, output_dir):
+        if self.unnormalize:
+            reals = self.unnormalize(reals)
+            fakes = self.unnormalize(fakes)
+        
         reals = tensor_to_numpy_img(reals).astype(np.float)
         fakes = tensor_to_numpy_img(fakes).astype(np.float)
 
@@ -126,7 +131,7 @@ class AE_Trainer():
             else:
                 tmp = np.concatenate((tmp, img), axis=1)
 
-        final_img = np.concatenate((final, tmp), axis=0)[:, :, 0].astype(np.uint8)
+        final_img = np.concatenate((final, tmp), axis=0).astype(np.uint8)
 
         Image.fromarray(final_img).save(f"{output_dir}/recon.png")
 
@@ -148,7 +153,6 @@ class AE_Trainer():
         for epoch in range(epochs):
             stats = self.init_stats()
             self.ae.train()
-            
             for imgs, lbls in tqdm(train_dloader, desc="Training"):
                 imgs = imgs.cuda()
                 lbls = lbls.cuda()

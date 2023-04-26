@@ -13,25 +13,11 @@ from torch.utils.data import DataLoader
 
 import torchvision.transforms as T
 from torchvision.datasets import MNIST
-from torchvision.transforms.functional import pad
 
 from models import ImageClassifier, ResNet50
 from logger import Logger
 from datasets import CUB
-
-def cub_pad(img):
-    pad_size = max(max(img.height, img.width), 500)
-    y_to_pad = pad_size - img.height
-    x_to_pad = pad_size - img.width
-
-    top_to_pad = y_to_pad // 2
-    bottom_to_pad = y_to_pad - top_to_pad
-    left_to_pad = x_to_pad // 2
-    right_to_pad = x_to_pad - left_to_pad
-
-    return pad(img,
-        (left_to_pad, top_to_pad, right_to_pad, bottom_to_pad),
-        fill=tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406))))
+from utils import cub_pad
 
 def load_data(dset, batch_size, use_bbox=False):
     train_transform = T.Compose([
@@ -54,8 +40,8 @@ def load_data(dset, batch_size, use_bbox=False):
         train_transform = T.Compose([
             T.Lambda(cub_pad),
             T.RandomOrder(flips_and_crop),
-            #T.RandomRotation(10),
-            #T.RandomPerspective(distortion_scale=0.25, p=0.5, interpolation=T.InterpolationMode.BILINEAR),
+            T.RandomRotation(10),
+            T.RandomPerspective(distortion_scale=0.25, p=0.5, interpolation=T.InterpolationMode.BILINEAR),
             #T.Resize((256, 256)),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
