@@ -80,10 +80,11 @@ def weights_init(m):
 
 
 class FeatureLayer(nn.Module):
-    def __init__(self, scale, in_channels=None, norm='IN'):
+    def __init__(self, scale, in_channels=None, norm='IN', extra_layers=0):
         super().__init__()
         self.scale = scale
         self.norm = _norm_options[norm.lower()]
+        self.extra_layers = extra_layers
         if in_channels is None:
             self.in_channels = 64*min(2**(self.scale-1), 16)
         else:
@@ -99,16 +100,31 @@ class FeatureLayer(nn.Module):
     def build(self):
         Norm = functools.partial(self.norm, affine=True)
         Activate = lambda: nn.LeakyReLU(0.2)
-        self.sub_layers = nn.ModuleList([
+        out_num_feat = 64*min(2**self.scale, 16)
+        layers = [
                 nn.Conv2d(
                     in_channels=self.in_channels,
-                    out_channels=64*min(2**self.scale, 16),
+                    out_channels=out_num_feat,
                     kernel_size=4,
                     stride=2,
                     padding=1,
                     bias=False),
-                Norm(num_features=64*min(2**self.scale, 16)),
-                Activate()])
+                Norm(num_features=out_num_feat),
+                Activate()]
+        
+        for _ in range(self.extra_layers):
+            layers += [
+                nn.Conv2d(
+                    in_channels=out_num_feat,
+                    out_channels=out_num_feat,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=False),
+                Norm(num_features=out_num_feat),
+                Activate()
+            ]
+        self.sub_layers = nn.ModuleList(layers)
 
 
 class LatentLayer(nn.Module):
@@ -137,10 +153,11 @@ class LatentLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, scale, in_channels=None, norm='IN'):
+    def __init__(self, scale, in_channels=None, norm='IN', extra_layers=0):
         super().__init__()
         self.scale = scale
         self.norm = _norm_options[norm.lower()]
+        self.extra_layers = extra_layers
         if in_channels is not None:
             self.in_channels = in_channels
         else:
@@ -156,16 +173,33 @@ class DecoderLayer(nn.Module):
     def build(self):
         Norm = functools.partial(self.norm, affine=True)
         Activate = lambda: nn.LeakyReLU(0.2)
-        self.sub_layers = nn.ModuleList([
+        out_num_feat = 64*min(2**self.scale, 16)
+        
+        layers = [
                 nn.ConvTranspose2d(
                     in_channels=self.in_channels,
-                    out_channels=64*min(2**self.scale, 16),
+                    out_channels=out_num_feat,
                     kernel_size=4,
                     stride=2,
                     padding=1,
                     bias=False),
-                Norm(num_features=64*min(2**self.scale, 16)),
-                Activate()])
+                Norm(num_features=out_num_feat),
+                Activate()]
+          
+        for _ in range(self.extra_layers):
+            layers += [
+                nn.Conv2d(
+                    in_channels=out_num_feat,
+                    out_channels=out_num_feat,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=False),
+                Norm(num_features=out_num_feat),
+                Activate()
+            ]
+
+        self.sub_layers = nn.ModuleList(layers)
 
 
 class DenseEncoderLayer(nn.Module):
@@ -258,12 +292,10 @@ class Distribution(object):
         self.std = torch.exp(0.5*self.logvar)
         self.var = torch.exp(self.logvar)
         if self.deterministic:
-            self.var = self.std = torch.zeros_like(self.mean).to(
-                torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+            self.var = self.std = torch.zeros_like(self.mean).to(self.mean.get_device())
 
     def sample(self):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        x = self.mean + self.std*torch.randn(self.mean.shape).to(device)
+        x = self.mean + self.std*torch.randn(self.mean.shape).to(self.mean.get_device())
         return x
 
     def kl(self, other=None):
@@ -293,7 +325,7 @@ class Distribution(object):
 
 
 class IIN_AE(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0):
         super().__init__()
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
@@ -308,15 +340,15 @@ class IIN_AE(nn.Module):
         self.feature_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
 
-        self.feature_layers.append(FeatureLayer(0, in_channels=in_channels, norm=norm))
+        self.feature_layers.append(FeatureLayer(0, in_channels=in_channels, norm=norm, extra_layers=extra_layers))
         for scale in range(1, n_down):
-            self.feature_layers.append(FeatureLayer(scale, norm=norm))
+            self.feature_layers.append(FeatureLayer(scale, norm=norm, extra_layers=extra_layers))
 
         self.dense_encode = DenseEncoderLayer(n_down, bottleneck_size, 2*z_dim)
         self.dense_decode = DenseDecoderLayer(n_down-1, bottleneck_size, z_dim)
 
         for scale in range(n_down-1):
-            self.decoder_layers.append(DecoderLayer(scale, norm=norm))
+            self.decoder_layers.append(DecoderLayer(scale, norm=norm, extra_layers=extra_layers))
         self.image_layer = ImageLayer(out_channels=in_channels)
 
         self.apply(weights_init)
