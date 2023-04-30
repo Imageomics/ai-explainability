@@ -7,16 +7,20 @@ from torchvision import models
 from iin_models.ae import IIN_AE
 
 class IIN_AE_Wrapper(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0):
         super().__init__()
-        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic)
+        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=extra_layers)
 
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
-        return nn.Sigmoid()(self.dist.sample()[:, :, 0, 0])
+        #return nn.Sigmoid()(self.dist.sample()[:, :, 0, 0])
+        return self.dist.sample()[:, :, 0, 0]
     
     def decode(self, z):
         return self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))
+    
+    def forward(self, x):
+        return self.decode(self.encode(x))
 
     def kl_loss(self):
         return self.dist.kl().mean()

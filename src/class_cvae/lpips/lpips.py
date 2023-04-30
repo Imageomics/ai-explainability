@@ -13,17 +13,21 @@ class LPIPS(nn.Module):
                         'alex' | 'squeeze' | 'vgg'. Default: 'alex'.
         version (str): the version of LPIPS. Default: 0.1.
     """
-    def __init__(self, net_type: str = 'vgg', version: str = '0.1'):
+    def __init__(self, net_type: str = 'vgg', version: str = '0.1', device = None):
 
         assert version in ['0.1'], 'v0.1 is only supported now'
 
         super(LPIPS, self).__init__()
 
         # pretrained network
-        self.net = get_network(net_type).to("cuda")
+
+        if device is None:
+            device = "cuda"
+
+        self.net = get_network(net_type).to(device)
 
         # linear layers
-        self.lin = LinLayers(self.net.n_channels_list).to("cuda")
+        self.lin = LinLayers(self.net.n_channels_list).to(device)
         self.lin.load_state_dict(get_state_dict(net_type, version))
 
     def forward(self, x: torch.Tensor, y: torch.Tensor):
