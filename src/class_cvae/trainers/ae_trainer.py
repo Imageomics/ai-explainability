@@ -48,51 +48,60 @@ class AE_Trainer():
         return stats
 
     def compute_loss(self, imgs, lbls, stats, recon_lambda=1, recon_zero_lambda=1, \
-                     cls_lambda=0.1, cls_zero_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001):
+                     cls_lambda=0.1, cls_zero_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, \
+                     kl_lambda=0.001, force_hardcode=False):
         l1_loss_fn = nn.L1Loss()
         lpips_loss_fn = LPIPS(device=self.gpu_id)
         class_loss_fn = nn.CrossEntropyLoss()
 
         z = self.ae.module.encode(imgs)
         z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
-        imgs_recon_zero_reg = self.ae.module.decode(torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1))
-        imgs_recon = self.ae.module.decode(z)
+        if force_hardcode:
+            imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
+        else:
+            imgs_recon = self.ae.module.decode(z)
 
         recon_loss = (l1_loss_fn(imgs, imgs_recon) + lpips_loss_fn(imgs, imgs_recon)) * recon_lambda
         stats["losses"]["recon"] += recon_loss.item()
         loss = recon_loss
         
-        recon_loss_zero = (l1_loss_fn(imgs, imgs_recon_zero_reg) + lpips_loss_fn(imgs, imgs_recon_zero_reg)) * recon_zero_lambda
-        stats["losses"]["zero_reg_recon"] += recon_loss_zero.item()
-        loss += recon_loss_zero
+        if cls_zero_lambda != 0 or recon_zero_lambda != 0:
+            imgs_recon_zero_reg = self.ae.module.decode(torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1))
+            recon_loss_zero = (l1_loss_fn(imgs, imgs_recon_zero_reg) + lpips_loss_fn(imgs, imgs_recon_zero_reg)) * recon_zero_lambda
+            stats["losses"]["zero_reg_recon"] += recon_loss_zero.item()
+            loss += recon_loss_zero
 
-        reg = nn.L1Loss()(z[:, :self.num_att_vars], z_force) * force_dis_lambda
-        stats["losses"]["disentangle"] += reg.item()
-        loss += reg
+            out_zero = self.img_classifier(self.img_cls_resize_fn(imgs_recon_zero_reg))
+            img_cls_zero_loss = class_loss_fn(out_zero, lbls) * cls_zero_lambda
+            stats["losses"]["img_cls_zero"] += img_cls_zero_loss.item()
+            loss += img_cls_zero_loss
 
-        normal_loss = self.ae.module.kl_loss() * kl_lambda
-        stats["losses"]["normal"] += normal_loss.item()
-        loss += normal_loss
+        if force_dis_lambda != 0:
+            reg = nn.L1Loss()(z[:, :self.num_att_vars], z_force) * force_dis_lambda
+            stats["losses"]["disentangle"] += reg.item()
+            loss += reg
 
-        sparcity_loss = l1_loss_fn(z, torch.zeros_like(z)) * sparcity_lambda
-        stats["losses"]["sparcity"] += sparcity_loss.item()
-        loss += sparcity_loss
+        if kl_lambda != 0:
+            normal_loss = self.ae.module.kl_loss() * kl_lambda
+            stats["losses"]["normal"] += normal_loss.item()
+            loss += normal_loss
 
-        out = self.img_classifier(self.img_cls_resize_fn(imgs_recon))
+        if sparcity_lambda != 0:
+            sparcity_loss = l1_loss_fn(z, torch.zeros_like(z)) * sparcity_lambda
+            stats["losses"]["sparcity"] += sparcity_loss.item()
+            loss += sparcity_loss
 
-        img_cls_loss = class_loss_fn(out, lbls) * cls_lambda
-        stats["losses"]["img_cls"] += img_cls_loss.item()
-        loss += img_cls_loss
+        if cls_lambda != 0:
+            out = self.img_classifier(self.img_cls_resize_fn(imgs_recon))
 
-        _, img_preds = torch.max(out, dim=1)
+            img_cls_loss = class_loss_fn(out, lbls) * cls_lambda
+            stats["losses"]["img_cls"] += img_cls_loss.item()
+            loss += img_cls_loss
 
-        stats["total"] += len(imgs)
-        stats["correct"] += (img_preds == lbls).sum().item()
+            _, img_preds = torch.max(out, dim=1)
 
-        out_zero = self.img_classifier(self.img_cls_resize_fn(imgs_recon_zero_reg))
-        img_cls_zero_loss = class_loss_fn(out_zero, lbls) * cls_zero_lambda
-        stats["losses"]["img_cls_zero"] += img_cls_zero_loss.item()
-        loss += img_cls_zero_loss
+            stats["total"] += len(imgs)
+            stats["correct"] += (img_preds == lbls).sum().item()
 
         stats["losses"]["all"] += loss.item()
 
@@ -154,7 +163,8 @@ class AE_Trainer():
 
     def train(self, train_dloader, test_dloader, epochs=100, lr=0.0001, logger=None, \
                 recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, cls_zero_lambda=0.1, \
-                force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001):
+                force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001, use_scheduler=False, \
+                force_hardcode=False):
         def log(x):
             if logger is None: return
             if not self.is_base_process(): return
@@ -163,7 +173,8 @@ class AE_Trainer():
 
         params = list(self.ae.module.parameters())
         optimizer = torch.optim.Adam(params, lr=lr)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+        if use_scheduler:
+            scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
         self.img_classifier.eval()
         for epoch in range(epochs):
@@ -179,7 +190,8 @@ class AE_Trainer():
                 lbls = self.set_device(lbls)
 
                 loss = self.compute_loss(imgs, lbls, stats, recon_lambda, recon_zero_lambda, \
-                                         cls_lambda, cls_zero_lambda, force_dis_lambda, sparcity_lambda, kl_lambda)
+                                         cls_lambda, cls_zero_lambda, force_dis_lambda, sparcity_lambda, \
+                                         kl_lambda, force_hardcode)
 
                 loss.backward()
                 optimizer.step()
@@ -187,6 +199,8 @@ class AE_Trainer():
             for key in stats["losses"]:
                 stats["losses"][key] = round(stats["losses"][key] / num_batches, 4)
 
+            if stats['total'] == 0:
+                stats['total'] = 1
             out_string = f"Epoch: {epoch+1} | " \
                 + f"Total Loss: {stats['losses']['all']} | " \
                 + f"Disentangle Loss: {stats['losses']['disentangle']} | " \
@@ -210,5 +224,6 @@ class AE_Trainer():
 
             torch.distributed.barrier()
 
-        scheduler.step()
+        if use_scheduler:
+            scheduler.step()
 
