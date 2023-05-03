@@ -284,7 +284,8 @@ class ImageLayer(nn.Module):
 
 
 class Distribution(object):
-    def __init__(self, parameters, deterministic=False):
+    def __init__(self, parameters, deterministic=False, num_att_vars=None):
+        self.num_att_vars = num_att_vars
         self.parameters = parameters
         self.mean, self.logvar = torch.chunk(parameters, 2, dim=1)
         self.logvar = torch.clamp(self.logvar, -30.0, 10.0)
@@ -293,6 +294,8 @@ class Distribution(object):
         self.var = torch.exp(self.logvar)
         if self.deterministic:
             self.var = self.std = torch.zeros_like(self.mean).to(self.mean.get_device())
+        elif num_att_vars is not None:
+            self.var[:, :num_att_vars] = self.std[:, :num_att_vars] = torch.zeros_like(self.mean[:, :num_att_vars]).to(self.mean.get_device())
 
     def sample(self):
         x = self.mean + self.std*torch.randn(self.mean.shape).to(self.mean.get_device())
@@ -302,14 +305,22 @@ class Distribution(object):
         if self.deterministic:
             return torch.Tensor([0.])
         else:
+            if self.num_att_vars is not None:
+                mean = self.mean[:, :self.num_att_vars]
+                var = self.var[:, :self.num_att_vars]
+                logvar = self.logvar[:, :self.num_att_vars]
+            else:
+                mean = self.mean
+                var = self.var
+                logvar = self.logvar
             if other is None:
-                return 0.5*torch.sum(torch.pow(self.mean, 2)
-                        + self.var - 1.0 - self.logvar,
+                return 0.5*torch.sum(torch.pow(mean, 2)
+                        + var - 1.0 - logvar,
                         dim=[1,2,3])
             else:
                 return 0.5*torch.sum(
-                        torch.pow(self.mean - other.mean, 2) / other.var
-                        + self.var / other.var - 1.0 - self.logvar + other.logvar,
+                        torch.pow(mean - other.mean, 2) / other.var
+                        + var / other.var - 1.0 - logvar + other.logvar,
                         dim=[1,2,3])
 
     def nll(self, sample):
@@ -325,10 +336,11 @@ class Distribution(object):
 
 
 class IIN_AE(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None):
         super().__init__()
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
+        self.num_att_vars = num_att_vars
         n_down = n_down
         z_dim = z_dim
         in_size = in_size
@@ -362,7 +374,7 @@ class IIN_AE(nn.Module):
         for layer in self.feature_layers:
             h = layer(h)
         h = self.dense_encode(h)
-        return Distribution(h, deterministic=self.be_deterministic)
+        return Distribution(h, deterministic=self.be_deterministic, num_att_vars=self.num_att_vars)
 
     def decode(self, input):
         h = input
