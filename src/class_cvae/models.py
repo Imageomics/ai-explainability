@@ -17,7 +17,9 @@ class IIN_AE_Wrapper(nn.Module):
         self.dist = self.iin_ae.encode(x)
         rv = self.dist.sample()[:, :, 0, 0]
         if self.num_att_vars is not None:
-           rv[:, :self.num_att_vars] = nn.Sigmoid()(rv[:, :self.num_att_vars])
+           att_vars = nn.Sigmoid()(rv[:, :self.num_att_vars])
+           new_rv = torch.cat((att_vars, rv[:, self.num_att_vars:]), 1)
+           return new_rv
         #return nn.Sigmoid()(rv)
         return rv
     

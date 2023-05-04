@@ -290,14 +290,18 @@ class Distribution(object):
         self.mean, self.logvar = torch.chunk(parameters, 2, dim=1)
         self.logvar = torch.clamp(self.logvar, -30.0, 10.0)
         self.deterministic = deterministic
-        self.std = torch.exp(0.5*self.logvar)
-        self.var = torch.exp(self.logvar)
+        std = torch.exp(0.5*self.logvar)
+        var = torch.exp(self.logvar)
         if self.deterministic:
             self.var = self.std = torch.zeros_like(self.mean).to(self.mean.get_device())
-        elif num_att_vars is not None:
-            self.var[:, :num_att_vars] = self.std[:, :num_att_vars] = torch.zeros_like(self.mean[:, :num_att_vars]).to(self.mean.get_device())
-
+        else:
+            self.var = var
+            self.std = std
     def sample(self):
+        if self.num_att_vars is not None:
+            x_att = self.mean[:, :self.num_att_vars]
+            x_var = self.mean[:, self.num_att_vars:] + self.std[:, self.num_att_vars:]*torch.randn(self.mean[:, self.num_att_vars:].shape).to(self.mean.get_device())
+            return torch.cat((x_att, x_var), 1)
         x = self.mean + self.std*torch.randn(self.mean.shape).to(self.mean.get_device())
         return x
 

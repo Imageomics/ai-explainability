@@ -62,7 +62,7 @@ def load_models(args):
     num_att_vars = len(cub_z_from_label(torch.tensor([0]), args.root_dset)[0])
     if args.only_recon:
         num_att_vars = None
-    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', True, \
+    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', False, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
