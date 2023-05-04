@@ -17,7 +17,7 @@ parser.add_argument("--z_dim", type=int, default=512)
 parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--epochs", type=int, default=100)
 parser.add_argument("--warmup_epochs", type=int, default=10)
-parser.add_argument("--lpips_lambda", type=float, default=0.1)
+parser.add_argument("--lpips_lambda", type=float, default=1.0)
 parser.add_argument("--l1_lambda", type=float, default=1.0)
 parser.add_argument("--z_reg_lambda", type=float, default=1.0)
 parser.add_argument("--lr", type=float, default=0.0001)
@@ -54,6 +54,8 @@ if args.encoder_resume is not None:
 if args.decoder_resume is not None:
     weights = torch.load(args.decoder_resume)
     decoder.load_state_dict(weights)
+
+weights = None
 
 encoder = encoder.cuda()
 decoder = decoder.cuda()
