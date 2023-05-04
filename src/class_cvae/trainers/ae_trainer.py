@@ -42,7 +42,8 @@ class AE_Trainer():
                 "all" : 0
             },
             "total" : 0,
-            "correct" : 0
+            "correct" : 0,
+            "zero_correct" : 0
         }
 
         return stats
@@ -76,6 +77,10 @@ class AE_Trainer():
             stats["losses"]["img_cls_zero"] += img_cls_zero_loss.item()
             loss += img_cls_zero_loss
 
+            _, img_preds = torch.max(out_zero, dim=1)
+
+            stats["zero_correct"] += (img_preds == lbls).sum().item()
+
         if force_dis_lambda != 0:
             reg = nn.L1Loss()(z[:, :self.num_att_vars], z_force) * force_dis_lambda
             stats["losses"]["disentangle"] += reg.item()
@@ -107,8 +112,9 @@ class AE_Trainer():
 
         return loss
     
-    def eval(self, test_dloader, logger=None):
+    def eval(self, test_dloader, logger=None, force_hardcode=False):
         correct = 0
+        zero_correct = 0
         total = 0
         self.ae.eval()
         with torch.no_grad():
@@ -116,18 +122,28 @@ class AE_Trainer():
                 imgs = self.set_device(imgs)
                 lbls = self.set_device(lbls)
 
-                z = self.ae.module.encode(imgs)
-                imgs_recon = self.ae.module.decode(z)
-                out = self.img_classifier(self.img_cls_resize_fn(imgs_recon))
+                z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
 
+                z = self.ae.module.encode(imgs)
+                if force_hardcode:
+                    imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
+                else:
+                    imgs_recon = self.ae.module.decode(z)
+                
+                out = self.img_classifier(self.img_cls_resize_fn(imgs_recon))
                 _, preds = torch.max(out, dim=1)
 
                 correct += (preds == lbls).sum().item()
                 total += len(imgs)
 
+                imgs_zero = self.ae.module.decode(torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1))
+                zero_out = self.img_classifier(self.img_cls_resize_fn(imgs_zero))
+                _, zero_preds = torch.max(zero_out, dim=1)
+                zero_correct += (zero_preds == lbls).sum().item()
+
             if logger and self.is_base_process():
-                self.save_imgs(imgs, imgs_recon, logger.get_path())
-        return correct / total
+                self.save_imgs(imgs, imgs_zero, imgs_recon, logger.get_path())
+        return correct / total, zero_correct / total
 
     def is_base_process(self):
         if self.gpu_id is not None and self.gpu_id != 0:
@@ -139,27 +155,26 @@ class AE_Trainer():
             return x.to(self.gpu_id)
         return x.cuda()
 
-    def save_imgs(self, reals, fakes, output_dir):      
+    def save_imgs(self, reals, zero_fakes, fakes, output_dir):      
         reals = tensor_to_numpy_img(reals).astype(np.float)
+        zero_fakes = tensor_to_numpy_img(zero_fakes).astype(np.float)
         fakes = tensor_to_numpy_img(fakes).astype(np.float)
 
         final = None
-        for img in reals:
+
+        for img_set in [reals, zero_fakes, fakes]:
+            tmp = None
+            for img in img_set:
+                if tmp is None:
+                    tmp = img
+                else:
+                    tmp = np.concatenate((tmp, img), axis=1)
             if final is None:
-                final = img
+                final = tmp
             else:
-                final = np.concatenate((final, img), axis=1)
+                final = np.concatenate((final, tmp), axis=0)
 
-        tmp = None
-        for img in fakes:
-            if tmp is None:
-                tmp = img
-            else:
-                tmp = np.concatenate((tmp, img), axis=1)
-
-        final_img = np.concatenate((final, tmp), axis=0).astype(np.uint8)
-
-        Image.fromarray(final_img).save(f"{output_dir}/recon.png")
+        Image.fromarray(final).save(f"{output_dir}/recon.png")
 
     def train(self, train_dloader, test_dloader, epochs=100, lr=0.0001, logger=None, \
                 recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, cls_zero_lambda=0.1, \
@@ -210,13 +225,14 @@ class AE_Trainer():
                 + f"Sparsity Loss: {stats['losses']['sparcity']} | " \
                 + f"Img Class Loss: {stats['losses']['img_cls']} | " \
                 + f"Img Class Zero Loss: {stats['losses']['img_cls_zero']} | " \
-                + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)}"
+                + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)}" \
+                + f"Image Zero Class Acc: {round(stats['zero_correct']/stats['total'], 4)}" \
 
             log(out_string)
 
             if self.is_base_process():
-                acc = self.eval(test_dloader, logger)
-                log(f"Epoch: {epoch+1} | Test Accuracy: {round(acc, 4)}")
+                acc, zero_acc = self.eval(test_dloader, logger, force_hardcode)
+                log(f"Epoch: {epoch+1} | Test Accuracy: {round(acc, 4)} | Zero Test Accuracy: {round(zero_acc, 4)}")
 
             if logger is not None and self.is_base_process():
                 torch.save(self.ae.module.state_dict(), f"{logger.get_path()}/ae.pt")
