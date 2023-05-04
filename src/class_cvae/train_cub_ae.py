@@ -60,6 +60,8 @@ def load_models(args):
         in_size = 256
 
     num_att_vars = len(cub_z_from_label(torch.tensor([0]), args.root_dset)[0])
+    if args.only_recon:
+        num_att_vars = None
     iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', True, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
@@ -82,17 +84,18 @@ def get_args():
     parser.add_argument('--no_scheduler', action='store_true', default=False)
     parser.add_argument('--img_classifier', type=str, default=None)
     parser.add_argument('--force_hardcode', action='store_true', default=None)
+    parser.add_argument('--only_recon', action='store_true', default=None)
     parser.add_argument('--ae', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--extra_layers', type=int, default=0)
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--recon_lambda', type=float, default=1)
-    parser.add_argument('--recon_zero_lambda', type=float, default=0.1)
+    parser.add_argument('--recon_zero_lambda', type=float, default=1)
     parser.add_argument('--cls_lambda', type=float, default=0.1)
     parser.add_argument('--cls_zero_lambda', type=float, default=0.1)
     parser.add_argument('--kl_lambda', type=float, default=0.001)
-    parser.add_argument('--sparcity_lambda', type=float, default=0.1)
+    parser.add_argument('--sparcity_lambda', type=float, default=0)
     parser.add_argument('--force_dis_lambda', type=float, default=1)
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--exp_name', type=str, default="cub_debug")
@@ -143,6 +146,14 @@ def main(rank, world_size, args):
 
 if __name__ == "__main__":
     args = get_args()
+    if args.only_recon:
+        args.recon_zero_lambda = 0
+        args.cls_lambda = 0
+        args.cls_zero_lambda = 0
+        args.force_dis_lambda = 0
+        args.sparcity_lambda = 0
+        args.kl_lambda = 0
+        force_hardcode = 0
     assert args.img_classifier is not None or args.continue_checkpoint
     world_size = torch.cuda.device_count()
     mp.spawn(main, args=(world_size, args,), nprocs=world_size)
