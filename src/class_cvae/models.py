@@ -16,8 +16,8 @@ class IIN_AE_Wrapper(nn.Module):
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
         rv = self.dist.sample()[:, :, 0, 0]
-        #if self.num_att_vars is not None:
-        #   rv[:, :self.num_att_vars] = nn.Sigmoid(rv[:, :self.num_att_vars])
+        if self.num_att_vars is not None:
+           rv[:, :self.num_att_vars] = nn.Sigmoid()(rv[:, :self.num_att_vars])
         #return nn.Sigmoid()(rv)
         return rv
     
