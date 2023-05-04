@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -65,7 +66,7 @@ def train(epoch, optimizer):
     total_lpips_loss = 0
     total_l1_loss = 0
     total_z_reg_loss = 0
-    for imgs, lbls, paths in dloader:
+    for imgs, lbls, paths in tqdm(dloader):
         imgs = imgs.cuda()
         z, mu, sigma = encoder(imgs, stats=True)
         imgs_recon = decoder(z)
