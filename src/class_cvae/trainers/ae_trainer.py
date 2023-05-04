@@ -122,9 +122,9 @@ class AE_Trainer():
                 imgs = self.set_device(imgs)
                 lbls = self.set_device(lbls)
 
-                z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
 
                 z = self.ae.module.encode(imgs)
+                z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
                 if force_hardcode:
                     imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
                 else:
@@ -156,9 +156,9 @@ class AE_Trainer():
         return x.cuda()
 
     def save_imgs(self, reals, zero_fakes, fakes, output_dir):      
-        reals = tensor_to_numpy_img(reals).astype(np.float)
-        zero_fakes = tensor_to_numpy_img(zero_fakes).astype(np.float)
-        fakes = tensor_to_numpy_img(fakes).astype(np.float)
+        reals = tensor_to_numpy_img(reals).astype(np.uint8)
+        zero_fakes = tensor_to_numpy_img(zero_fakes).astype(np.uint8)
+        fakes = tensor_to_numpy_img(fakes).astype(np.uint8)
 
         final = None
 
@@ -225,7 +225,7 @@ class AE_Trainer():
                 + f"Sparsity Loss: {stats['losses']['sparcity']} | " \
                 + f"Img Class Loss: {stats['losses']['img_cls']} | " \
                 + f"Img Class Zero Loss: {stats['losses']['img_cls_zero']} | " \
-                + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)}" \
+                + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)} | " \
                 + f"Image Zero Class Acc: {round(stats['zero_correct']/stats['total'], 4)}" \
 
             log(out_string)
