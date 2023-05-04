@@ -1,11 +1,12 @@
 from argparse import ArgumentParser
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Resize, Compose
 
 from options import load_config
-from datasets import CuthillDataset
+from datasets import CuthillDataset, MyersJiggins
 from models import VGG_VEncoder, Decoder, VGG_Decoder
 from loss.lpips.lpips import LPIPS
 from tools import show_reconstruction_images, init_weights
@@ -23,15 +24,26 @@ parser.add_argument("--lr", type=float, default=0.0001)
 parser.add_argument("--warmup_lr", type=float, default=0.0003)
 parser.add_argument("--encoder_resume", type=str, default=None)
 parser.add_argument("--decoder_resume", type=str, default=None)
+parser.add_argument("--dset", type=str, default="cuthill", choices=["cuthill", "myers-jiggins"])
 args = parser.parse_args()
 
-options = load_config('../configs/cuthill_train.yaml')
+if args.dset == "cuthill":
+    start_size = 8
+    options = load_config('../configs/cuthill_train.yaml')
+    dset = CuthillDataset(options, train=True, transform=ToTensor())
+elif args.dset == "myers-jiggins":
+    start_size = 32
+    options = load_config('../configs/myers_jiggins_train.yaml')
+    transforms = Compose([
+        Resize((512, 512)),
+        ToTensor()
+    ])
+    dset = MyersJiggins(options, train=True, transform=transforms)
 
-dset = CuthillDataset(options, train=True, transform=ToTensor())
 dloader = DataLoader(dset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
 encoder = VGG_VEncoder(z_dim=args.z_dim)
-decoder = VGG_Decoder(z_dim=args.z_dim)
+decoder = VGG_Decoder(z_dim=args.z_dim, start_size=start_size)
 
 encoder.apply(init_weights)
 decoder.apply(init_weights)
@@ -54,7 +66,7 @@ def train(epoch, optimizer):
     total_lpips_loss = 0
     total_l1_loss = 0
     total_z_reg_loss = 0
-    for imgs, lbls, paths in dloader:
+    for imgs, lbls, paths in tqdm(dloader):
         imgs = imgs.cuda()
         z, mu, sigma = encoder(imgs, stats=True)
         imgs_recon = decoder(z)
@@ -62,7 +74,7 @@ def train(epoch, optimizer):
         
         lpips_loss = lpips_loss_fn(imgs, imgs_recon)
         l1_loss = l1_loss_fn(imgs, imgs_recon)
-        z_reg_loss = normal_loss = normal_loss_fn(mu, sigma)
+        z_reg_loss = normal_loss_fn(mu, sigma)
 
         loss = lpips_loss * args.lpips_lambda + l1_loss * args.l1_lambda + z_reg_loss * args.z_reg_lambda
 

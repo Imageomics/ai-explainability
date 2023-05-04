@@ -78,8 +78,6 @@ class CuthillDataset(Dataset):
         out += f"Image shape: {img_shape}\n"
         out += "================================"
         return out
-    
-
 
 class MyersJiggins(Dataset):
     def __init__(self, options, train=True, transform=None):

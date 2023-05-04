@@ -1,4 +1,4 @@
-DATASET: /local/scratch/carlyn.1/myers_jiggins_preprocess/ml-morph/
+DATASET: /local/scratch/david/myers_jiggins_preprocess/ml-morph/
 DATA_TO_TRAIN: train
 WING_TYPE: forewings
 

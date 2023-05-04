@@ -324,11 +324,11 @@ class Decoder(nn.Module):
         return x
 
 class VGG_Decoder(nn.Module):
-    def __init__(self, z_dim=512):
+    def __init__(self, z_dim=512, start_size=8):
         super().__init__()
 
         self.linear = nn.Sequential(
-            nn.Linear(z_dim, 8*8*256),
+            nn.Linear(z_dim, start_size*start_size*256),
             nn.ReLU()
         )
 
@@ -382,4 +382,3 @@ class VGG_Decoder(nn.Module):
 
         x = ((x + 1) / 2)
         return x
-    

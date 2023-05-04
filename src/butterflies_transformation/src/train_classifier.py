@@ -12,7 +12,7 @@ from tools import init_weights
 
 parser = ArgumentParser()
 parser.add_argument("--batch_size", type=int, default=16)
-parser.add_argument("--epochs", type=int, default=50)
+parser.add_argument("--epochs", type=int, default=200)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--dset", type=str, default="cuthill", choices=["cuthill", "myers-jiggins"])
 args = parser.parse_args()
