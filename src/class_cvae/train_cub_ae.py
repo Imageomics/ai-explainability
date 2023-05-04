@@ -58,7 +58,10 @@ def load_models(args):
     in_size = 375
     if args.use_bbox:
         in_size = 256
-    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', True, extra_layers=args.extra_layers)
+
+    num_att_vars = len(cub_z_from_label(torch.tensor([0]), args.root_dset)[0])
+    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', True, \
+                            extra_layers=args.extra_layers, num_att_vars=num_att_vars)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
     if args.continue_checkpoint:

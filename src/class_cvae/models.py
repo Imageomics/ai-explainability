@@ -7,14 +7,19 @@ from torchvision import models
 from iin_models.ae import IIN_AE
 
 class IIN_AE_Wrapper(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None):
         super().__init__()
-        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=extra_layers)
+        self.num_att_vars = num_att_vars
+        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
+                             extra_layers=extra_layers, num_att_vars=num_att_vars)
 
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
-        #return nn.Sigmoid()(self.dist.sample()[:, :, 0, 0])
-        return self.dist.sample()[:, :, 0, 0]
+        rv = self.dist.sample()[:, :, 0, 0]
+        if self.num_att_vars is not None:
+           rv[:, :self.num_att_vars] = nn.Sigmoid()(rv[:, :self.num_att_vars])
+        #return nn.Sigmoid()(rv)
+        return rv
     
     def decode(self, z):
         return self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))
