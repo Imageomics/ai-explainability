@@ -7,19 +7,32 @@ from torchvision import models
 from iin_models.ae import IIN_AE
 
 class IIN_AE_Wrapper(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
+                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False):
         super().__init__()
         self.num_att_vars = num_att_vars
         self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
                              extra_layers=extra_layers, num_att_vars=num_att_vars)
+        self.cls_vec = None
+        if add_real_cls_vec:
+            self.cls_vec = nn.parameter.Parameter(torch.ones(num_att_vars), requires_grad=True)
 
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
         rv = self.dist.sample()[:, :, 0, 0]
         if self.num_att_vars is not None:
-           rv[:, :self.num_att_vars] = nn.Sigmoid()(rv[:, :self.num_att_vars])
+            att_vars = nn.Sigmoid()(rv[:, :self.num_att_vars])
+            new_rv = torch.cat((att_vars, rv[:, self.num_att_vars:]), 1)    
+            return new_rv
         #return nn.Sigmoid()(rv)
         return rv
+    
+    def replace(self, z):
+        if self.cls_vec is None: return z
+        att_vars = z[:, :self.num_att_vars]
+        feat_vars = att_vars * self.cls_vec
+        feat_rv = torch.cat((feat_vars, z[:, self.num_att_vars:]), 1)
+        return feat_rv
     
     def decode(self, z):
         return self.iin_ae.decode(z.unsqueeze(2).unsqueeze(3))

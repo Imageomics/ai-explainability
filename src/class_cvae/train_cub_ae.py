@@ -62,8 +62,9 @@ def load_models(args):
     num_att_vars = len(cub_z_from_label(torch.tensor([0]), args.root_dset)[0])
     if args.only_recon:
         num_att_vars = None
-    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', True, \
-                            extra_layers=args.extra_layers, num_att_vars=num_att_vars)
+    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', False, \
+                            extra_layers=args.extra_layers, num_att_vars=num_att_vars, \
+                            add_real_cls_vec=args.add_real_cls_vec)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
     if args.continue_checkpoint:
@@ -83,8 +84,9 @@ def get_args():
     parser.add_argument('--continue_checkpoint', action='store_true', default=False)
     parser.add_argument('--no_scheduler', action='store_true', default=False)
     parser.add_argument('--img_classifier', type=str, default=None)
-    parser.add_argument('--force_hardcode', action='store_true', default=None)
-    parser.add_argument('--only_recon', action='store_true', default=None)
+    parser.add_argument('--add_real_cls_vec', action='store_true', default=False)
+    parser.add_argument('--force_hardcode', action='store_true', default=False)
+    parser.add_argument('--only_recon', action='store_true', default=False)
     parser.add_argument('--ae', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=100)
@@ -94,7 +96,7 @@ def get_args():
     parser.add_argument('--recon_zero_lambda', type=float, default=1)
     parser.add_argument('--cls_lambda', type=float, default=0.1)
     parser.add_argument('--cls_zero_lambda', type=float, default=0.1)
-    parser.add_argument('--kl_lambda', type=float, default=0.001)
+    parser.add_argument('--kl_lambda', type=float, default=0.0001)
     parser.add_argument('--sparcity_lambda', type=float, default=0)
     parser.add_argument('--force_dis_lambda', type=float, default=1)
     parser.add_argument('--output_dir', type=str, default="output")

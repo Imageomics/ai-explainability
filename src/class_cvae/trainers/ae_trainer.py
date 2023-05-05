@@ -58,16 +58,18 @@ class AE_Trainer():
         z = self.ae.module.encode(imgs)
         z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
         if force_hardcode:
-            imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
+            z_with_hardcode = torch.cat((z_force, z[:, self.num_att_vars:]), 1)
+            imgs_recon = self.ae.module.decode(self.ae.module.replace(z_with_hardcode))
         else:
-            imgs_recon = self.ae.module.decode(z)
+            imgs_recon = self.ae.module.decode(self.ae.module.replace(z))
 
         recon_loss = (l1_loss_fn(imgs, imgs_recon) + lpips_loss_fn(imgs, imgs_recon)) * recon_lambda
         stats["losses"]["recon"] += recon_loss.item()
         loss = recon_loss
         
         if cls_zero_lambda != 0 or recon_zero_lambda != 0:
-            imgs_recon_zero_reg = self.ae.module.decode(torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1))
+            z_zero_with_hardcode = torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1)
+            imgs_recon_zero_reg = self.ae.module.decode(self.ae.module.replace(z_zero_with_hardcode))
             recon_loss_zero = (l1_loss_fn(imgs, imgs_recon_zero_reg) + lpips_loss_fn(imgs, imgs_recon_zero_reg)) * recon_zero_lambda
             stats["losses"]["zero_reg_recon"] += recon_loss_zero.item()
             loss += recon_loss_zero
