@@ -1,5 +1,5 @@
 use_bbox: true
-continue_checkpoint: true
+continue_checkpoint: false
 no_scheduler: true
 img_classifier: output/cub_img_classifier_small/img_classifier.pt
 add_real_cls_vec: false
@@ -8,6 +8,7 @@ only_recon: true
 batch_size: 32
 epochs: 500
 extra_layers: 2
+depth: 7
 lr: 0.000001
 recon_lambda: 1.0
 recon_zero_lambda: 0
@@ -17,6 +18,7 @@ kl_lambda: 0
 sparcity_lambda: 0
 force_dis_lambda: 0
 output_dir: output
-exp_name: cub_ae_nosig_512_only_recon
+exp_name: cub_ae_nosig_512_only_recon_img128
 num_features: 512
+img_size: 128
 root_dset: /local/scratch/cv_datasets/CUB_200_2011/

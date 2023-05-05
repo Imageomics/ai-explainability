@@ -390,3 +390,51 @@ class IIN_AE(nn.Module):
 
     def get_last_layer(self):
         return self.image_layer.sub_layers[0].weight
+    
+class IIN_RESNET_AE(nn.Module):
+    def __init__(self, resnet, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None):
+        super().__init__()
+        import torch.backends.cudnn as cudnn
+        cudnn.benchmark = True
+        self.num_att_vars = num_att_vars
+        self.resnet = resnet
+        n_down = n_down
+        z_dim = z_dim
+        in_size = in_size
+        bottleneck_size = in_size // 2**n_down
+        in_channels = in_channels
+        norm = norm
+        self.be_deterministic = deterministic
+
+        self.decoder_layers = nn.ModuleList()
+
+        self.encode_linear = nn.Linear(2048, 2*z_dim)
+        self.dense_decode = DenseDecoderLayer(n_down-1, bottleneck_size, z_dim)
+
+        for scale in range(n_down-1):
+            self.decoder_layers.append(DecoderLayer(scale, norm=norm, extra_layers=extra_layers))
+        self.image_layer = ImageLayer(out_channels=in_channels)
+
+        self.apply(weights_init)
+
+        self.n_down = n_down
+        self.z_dim = z_dim
+        self.bottleneck_size = bottleneck_size
+
+    def encode(self, input):
+        h = input
+        h = self.resnet.get_features(h)
+        h = self.encode_linear(h)
+        h = h.unsqueeze(2).unsqueeze(3)
+        return Distribution(h, deterministic=self.be_deterministic, num_att_vars=self.num_att_vars)
+
+    def decode(self, input):
+        h = input
+        h = self.dense_decode(h)
+        for layer in reversed(self.decoder_layers):
+            h = layer(h)
+        h = self.image_layer(h)
+        return h
+
+    def get_last_layer(self):
+        return self.image_layer.sub_layers[0].weight

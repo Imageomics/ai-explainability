@@ -4,15 +4,19 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
-from iin_models.ae import IIN_AE
+from iin_models.ae import IIN_AE, IIN_RESNET_AE
 
 class IIN_AE_Wrapper(nn.Module):
     def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False):
+                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None):
         super().__init__()
         self.num_att_vars = num_att_vars
-        self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                             extra_layers=extra_layers, num_att_vars=num_att_vars)
+        if resnet is None:
+            self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
+                                extra_layers=extra_layers, num_att_vars=num_att_vars)
+        else:
+            self.iin_ae = IIN_RESNET_AE(resnet, n_down, z_dim, in_size, in_channels, norm, deterministic, \
+                                extra_layers=extra_layers, num_att_vars=num_att_vars)
         self.cls_vec = None
         if add_real_cls_vec:
             self.cls_vec = nn.parameter.Parameter(torch.ones(num_att_vars), requires_grad=True)
@@ -65,7 +69,13 @@ class ResNet50(nn.Module):
         self.in_features = model_resnet.fc.in_features
         self.linear = nn.Linear(self.in_features, num_classes)
 
-    def forward(self, x, compute_z=False):
+    def forward(self, x):
+        x = self.get_features(x)
+        x = self.linear(x)
+
+        return x
+    
+    def get_features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -76,8 +86,6 @@ class ResNet50(nn.Module):
         x = self.layer4(x)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.linear(x)
-
         return x
 
 
