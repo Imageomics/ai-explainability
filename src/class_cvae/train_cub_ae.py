@@ -15,6 +15,7 @@ from models import IIN_AE_Wrapper, ResNet50
 from datasets import CUB
 from logger import Logger
 from utils import cub_pad
+from options import add_configs
 
 def load_data(args):
     all_transforms = []
@@ -104,6 +105,7 @@ def get_args():
     parser.add_argument('--num_features', type=int, default=512)
     parser.add_argument('--port', type=str, default="5001")
     parser.add_argument('--root_dset', type=str, default="/local/scratch/cv_datasets/CUB_200_2011/")
+    parser.add_argument('--configs', type=str, default=None)
     return parser.parse_args()
 
 def get_hardcode_cub_latent_map(root_dset):
@@ -148,6 +150,8 @@ def main(rank, world_size, args):
 
 if __name__ == "__main__":
     args = get_args()
+    if args.configs is not None:
+        add_configs(args, args.configs)
     if args.only_recon:
         args.recon_zero_lambda = 0
         args.cls_lambda = 0
