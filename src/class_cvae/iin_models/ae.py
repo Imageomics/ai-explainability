@@ -310,9 +310,9 @@ class Distribution(object):
             return torch.Tensor([0.])
         else:
             if self.num_att_vars is not None:
-                mean = self.mean[:, :self.num_att_vars]
-                var = self.var[:, :self.num_att_vars]
-                logvar = self.logvar[:, :self.num_att_vars]
+                mean = self.mean[:, self.num_att_vars:]
+                var = self.var[:, self.num_att_vars:]
+                logvar = self.logvar[:, self.num_att_vars:]
             else:
                 mean = self.mean
                 var = self.var
