@@ -340,11 +340,13 @@ class Distribution(object):
 
 
 class IIN_AE(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None):
+    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, extra_layers=0, num_att_vars=None, \
+                 inject_z=False):
         super().__init__()
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
         self.num_att_vars = num_att_vars
+        self.inject_z = inject_z
         n_down = n_down
         z_dim = z_dim
         in_size = in_size
@@ -367,6 +369,12 @@ class IIN_AE(nn.Module):
             self.decoder_layers.append(DecoderLayer(scale, norm=norm, extra_layers=extra_layers))
         self.image_layer = ImageLayer(out_channels=in_channels)
 
+        if inject_z:
+            self.z_linears = nn.ModuleList()
+            self.z_linears.append(nn.Linear(z_dim, 2))
+            for _ in range(n_down-1):
+                self.z_linears.append(nn.Linear(z_dim, 2))
+
         self.apply(weights_init)
 
         self.n_down = n_down
@@ -383,7 +391,12 @@ class IIN_AE(nn.Module):
     def decode(self, input):
         h = input
         h = self.dense_decode(h)
-        for layer in reversed(self.decoder_layers):
+        for i, layer in enumerate(reversed(self.decoder_layers)):
+            if self.inject_z:
+                stats = self.z_linears[i](input[:, :, 0, 0])
+                b, d, ht, w = h.shape
+                h = h * stats[:, 0].unsqueeze(1).unsqueeze(2).unsqueeze(3).repeat(1, d, ht, w)
+                h = h + stats[:, 1].unsqueeze(1).unsqueeze(2).unsqueeze(3).repeat(1, d, ht, w)
             h = layer(h)
         h = self.image_layer(h)
         return h
