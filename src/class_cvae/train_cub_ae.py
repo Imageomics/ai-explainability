@@ -24,7 +24,7 @@ def load_data(args):
         all_transforms.append(T.CenterCrop((375, 375)))
     all_transforms.append(T.RandomRotation(10))
     if args.use_bbox:
-        all_transforms.append(T.Resize((256, 256)))
+        all_transforms.append(T.Resize((args.img_size, args.img_size)))
     all_transforms.append(T.ToTensor())
     #all_transforms.append(T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))
 
@@ -32,7 +32,7 @@ def load_data(args):
 
     test_transform_arr = []
     if args.use_bbox:
-        test_transform_arr.append(T.Resize((256, 256)))
+        test_transform_arr.append(T.Resize((args.img_size, args.img_size)))
     else:
         test_transform_arr.append(T.Lambda(cub_pad))
         test_transform_arr.append(T.CenterCrop((375, 375)))
@@ -58,14 +58,19 @@ def multi_gpu_setup(rank, world_size, port="5001"):
 def load_models(args):
     in_size = 375
     if args.use_bbox:
-        in_size = 256
+        in_size = args.img_size
 
     num_att_vars = len(cub_z_from_label(torch.tensor([0]), args.root_dset)[0])
     if args.only_recon:
         num_att_vars = None
-    iin_ae = IIN_AE_Wrapper(7, args.num_features, in_size, 3, 'an', False, \
+    
+    resnet = None
+    if args.use_resnet_encoder:
+        resnet = ResNet50(img_ch=3)
+    
+    iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'an', args.only_recon, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars, \
-                            add_real_cls_vec=args.add_real_cls_vec)
+                            add_real_cls_vec=args.add_real_cls_vec, resnet=resnet)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
     if args.continue_checkpoint:
@@ -88,6 +93,7 @@ def get_args():
     parser.add_argument('--add_real_cls_vec', action='store_true', default=False)
     parser.add_argument('--force_hardcode', action='store_true', default=False)
     parser.add_argument('--only_recon', action='store_true', default=False)
+    parser.add_argument('--use_resnet_encoder', action='store_true', default=False)
     parser.add_argument('--ae', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=100)
@@ -103,6 +109,8 @@ def get_args():
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--exp_name', type=str, default="cub_debug")
     parser.add_argument('--num_features', type=int, default=512)
+    parser.add_argument('--img_size', type=int, default=256)
+    parser.add_argument('--depth', type=int, default=7)
     parser.add_argument('--port', type=str, default="5001")
     parser.add_argument('--root_dset', type=str, default="/local/scratch/cv_datasets/CUB_200_2011/")
     parser.add_argument('--configs', type=str, default=None)
