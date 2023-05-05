@@ -11,6 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 
 from trainers.ae_trainer import AE_Trainer
+from trainers.ae_decoder_trainer import AE_Decoder_Trainer
 from models import IIN_AE_Wrapper, ResNet50
 from datasets import CUB
 from logger import Logger
@@ -70,7 +71,7 @@ def load_models(args):
     
     iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'an', args.only_recon, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars, \
-                            add_real_cls_vec=args.add_real_cls_vec, resnet=resnet)
+                            add_real_cls_vec=args.add_real_cls_vec, resnet=resnet, inject_z=args.inject_z)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
     if args.continue_checkpoint:
@@ -94,6 +95,7 @@ def get_args():
     parser.add_argument('--force_hardcode', action='store_true', default=False)
     parser.add_argument('--only_recon', action='store_true', default=False)
     parser.add_argument('--use_resnet_encoder', action='store_true', default=False)
+    parser.add_argument('--inject_z', action='store_true', default=False)
     parser.add_argument('--ae', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=100)
@@ -112,6 +114,7 @@ def get_args():
     parser.add_argument('--img_size', type=int, default=256)
     parser.add_argument('--depth', type=int, default=7)
     parser.add_argument('--port', type=str, default="5001")
+    parser.add_argument('--trainer', type=str, default="ae", choices=["ae", "decoder"])
     parser.add_argument('--root_dset', type=str, default="/local/scratch/cv_datasets/CUB_200_2011/")
     parser.add_argument('--configs', type=str, default=None)
     return parser.parse_args()
@@ -147,7 +150,12 @@ def main(rank, world_size, args):
     unnormalize = None #T.Normalize([-0.485/0.229, -0.456/0.224, -0.406/0.225], [1/0.229, 1/0.224, 1/0.225])
     normalize = T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
-    trainer = AE_Trainer(ae, img_classifier, lambda x: cub_z_from_label(x, args.root_dset), gpu_id=rank, img_cls_resize_fn=normalize)
+    if args.trainer == "ae":
+        trainer = AE_Trainer(ae, img_classifier, lambda x: cub_z_from_label(x, args.root_dset), gpu_id=rank, img_cls_resize_fn=normalize)
+    elif args.trainer == "decoder":
+        trainer = AE_Decoder_Trainer(ae, img_classifier, lambda x: cub_z_from_label(x, args.root_dset), gpu_id=rank, img_cls_resize_fn=normalize)
+
+    
     trainer.train(train_dloader, test_dloader, epochs=args.epochs, lr=args.lr, logger=logger, \
                     recon_lambda=args.recon_lambda, recon_zero_lambda=args.recon_zero_lambda, \
                     cls_lambda=args.cls_lambda, cls_zero_lambda=args.cls_zero_lambda, \

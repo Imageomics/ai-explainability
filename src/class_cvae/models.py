@@ -8,12 +8,13 @@ from iin_models.ae import IIN_AE, IIN_RESNET_AE
 
 class IIN_AE_Wrapper(nn.Module):
     def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None):
+                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None, \
+                 inject_z=False):
         super().__init__()
         self.num_att_vars = num_att_vars
         if resnet is None:
             self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                                extra_layers=extra_layers, num_att_vars=num_att_vars)
+                                extra_layers=extra_layers, num_att_vars=num_att_vars, inject_z=inject_z)
         else:
             self.iin_ae = IIN_RESNET_AE(resnet, n_down, z_dim, in_size, in_channels, norm, deterministic, \
                                 extra_layers=extra_layers, num_att_vars=num_att_vars)
