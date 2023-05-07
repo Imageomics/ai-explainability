@@ -9,7 +9,7 @@ from iin_models.ae import IIN_AE, IIN_RESNET_AE
 class IIN_AE_Wrapper(nn.Module):
     def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
                  extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None, \
-                 inject_z=False):
+                 inject_z=False, add_gan=False):
         super().__init__()
         self.num_att_vars = num_att_vars
         if resnet is None:
@@ -22,6 +22,23 @@ class IIN_AE_Wrapper(nn.Module):
         if add_real_cls_vec:
             self.cls_vec = nn.parameter.Parameter(torch.ones(num_att_vars), requires_grad=True)
 
+        self.z_dim = z_dim
+        self.generator = None
+        self.discriminator = None
+        if add_gan:
+            self.generator = nn.Sequential(
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim)
+            )
+            weights = models.VGG16_BN_Weights.IMAGENET1K_V1
+            self.discriminator = models.vgg16_bn(weights=weights)
+            self.discriminator.classifier = nn.Sequential(
+                nn.Linear(512 * 7 * 7, 1)
+            )
+            
+
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
         rv = self.dist.sample()[:, :, 0, 0]
@@ -31,6 +48,23 @@ class IIN_AE_Wrapper(nn.Module):
             return new_rv
         #return nn.Sigmoid()(rv)
         return rv
+    
+    def generate(self, num, device):
+        z = torch.normal(0, 1, size=(num, self.z_dim)).to(device)
+        if self.num_att_vars is not None:
+            z_att = torch.randint(0, 2, (num, self.num_att_vars))
+            z[:, :self.num_att_vars] = z_att
+            
+        w = self.generator(z)
+        w_c = self.replace(w)
+
+        img = self.decode(w_c)
+
+        return img
+    
+    #TODO: resnet18?
+    def discriminate(self, imgs):
+        return self.discriminator(imgs)
     
     def replace(self, z):
         if self.cls_vec is None: return z

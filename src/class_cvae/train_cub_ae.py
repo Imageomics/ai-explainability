@@ -69,9 +69,10 @@ def load_models(args):
     if args.use_resnet_encoder:
         resnet = ResNet50(img_ch=3)
     
-    iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'an', args.only_recon, \
+    iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'bn', args.only_recon, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars, \
-                            add_real_cls_vec=args.add_real_cls_vec, resnet=resnet, inject_z=args.inject_z)
+                            add_real_cls_vec=args.add_real_cls_vec, resnet=resnet, inject_z=args.inject_z, \
+                            add_gan=args.add_gan)
     img_classifier = ResNet50(num_classes=200, img_ch=3)
 
     if args.continue_checkpoint:
@@ -96,6 +97,7 @@ def get_args():
     parser.add_argument('--only_recon', action='store_true', default=False)
     parser.add_argument('--use_resnet_encoder', action='store_true', default=False)
     parser.add_argument('--inject_z', action='store_true', default=False)
+    parser.add_argument('--add_gan', action='store_true', default=False)
     parser.add_argument('--ae', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=100)
@@ -110,6 +112,7 @@ def get_args():
     parser.add_argument('--force_dis_lambda', type=float, default=1)
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--exp_name', type=str, default="cub_debug")
+    parser.add_argument('--pixel_loss', type=str, default="l1", choices=["l1", "mse"])
     parser.add_argument('--num_features', type=int, default=512)
     parser.add_argument('--img_size', type=int, default=256)
     parser.add_argument('--depth', type=int, default=7)
@@ -160,7 +163,8 @@ def main(rank, world_size, args):
                     recon_lambda=args.recon_lambda, recon_zero_lambda=args.recon_zero_lambda, \
                     cls_lambda=args.cls_lambda, cls_zero_lambda=args.cls_zero_lambda, \
                     force_dis_lambda=args.force_dis_lambda, sparcity_lambda=args.sparcity_lambda, \
-                    kl_lambda=args.kl_lambda, use_scheduler=(not args.no_scheduler), force_hardcode=args.force_hardcode)
+                    kl_lambda=args.kl_lambda, use_scheduler=(not args.no_scheduler), force_hardcode=args.force_hardcode, \
+                    add_gan=args.add_gan, pixel_loss=args.pixel_loss)
     
     destroy_process_group()
 
