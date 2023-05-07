@@ -32,6 +32,8 @@ class AE_Trainer():
         stats = {
             "losses" : {
                 "recon" : 0,
+                "l1" : 0,
+                "lpips" : 0,
                 "zero_reg_recon" : 0,
                 "latent_cls" : 0,
                 "sparcity" : 0,
@@ -39,6 +41,8 @@ class AE_Trainer():
                 "disentangle" : 0,
                 "img_cls" : 0,
                 "img_cls_zero" : 0,
+                "g_loss" : 0,
+                "d_loss" : 0,
                 "all" : 0
             },
             "total" : 0,
@@ -50,8 +54,10 @@ class AE_Trainer():
 
     def compute_loss(self, imgs, lbls, stats, recon_lambda=1, recon_zero_lambda=1, \
                      cls_lambda=0.1, cls_zero_lambda=0.1, force_dis_lambda=1, sparcity_lambda=0.1, \
-                     kl_lambda=0.001, force_hardcode=False):
-        l1_loss_fn = nn.L1Loss()
+                     kl_lambda=0.001, force_hardcode=False, pixel_loss="l1"):
+        pixel_loss_fn = nn.L1Loss()
+        if pixel_loss == "mse":
+            pixel_loss_fn = nn.MSELoss()
         lpips_loss_fn = LPIPS(device=self.gpu_id)
         class_loss_fn = nn.CrossEntropyLoss()
 
@@ -63,8 +69,12 @@ class AE_Trainer():
         else:
             imgs_recon = self.ae.module.decode(self.ae.module.replace(z))
 
-        recon_loss = (l1_loss_fn(imgs, imgs_recon) + lpips_loss_fn(imgs, imgs_recon)) * recon_lambda
+        l1_loss = pixel_loss_fn(imgs, imgs_recon)
+        lpips_loss = lpips_loss_fn(imgs, imgs_recon)
+        recon_loss = (l1_loss + lpips_loss) * recon_lambda
         stats["losses"]["recon"] += recon_loss.item()
+        stats["losses"]["l1"] += l1_loss.item()
+        stats["losses"]["lpips"] += lpips_loss.item()
         loss = recon_loss
         
         if cls_zero_lambda != 0 or recon_zero_lambda != 0:
@@ -114,7 +124,7 @@ class AE_Trainer():
 
         return loss
     
-    def eval(self, test_dloader, logger=None, force_hardcode=False):
+    def eval(self, test_dloader, logger=None, force_hardcode=False, add_gan=False):
         correct = 0
         zero_correct = 0
         total = 0
@@ -144,7 +154,10 @@ class AE_Trainer():
                 zero_correct += (zero_preds == lbls).sum().item()
 
             if logger and self.is_base_process():
-                self.save_imgs(imgs, imgs_zero, imgs_recon, logger.get_path())
+                gen_imgs = None
+                if add_gan:
+                    gen_imgs = self.ae.module.generate(len(imgs), imgs.get_device())
+                self.save_imgs(imgs, imgs_zero, imgs_recon, gen_imgs, logger.get_path())
         return correct / total, zero_correct / total
 
     def is_base_process(self):
@@ -157,14 +170,20 @@ class AE_Trainer():
             return x.to(self.gpu_id)
         return x.cuda()
 
-    def save_imgs(self, reals, zero_fakes, fakes, output_dir):      
+    def save_imgs(self, reals, zero_fakes, fakes, gen_imgs, output_dir):      
         reals = tensor_to_numpy_img(reals).astype(np.uint8)
         zero_fakes = tensor_to_numpy_img(zero_fakes).astype(np.uint8)
         fakes = tensor_to_numpy_img(fakes).astype(np.uint8)
 
+        image_sets = [reals, zero_fakes, fakes]
+
+        if gen_imgs is not None:
+            gen_imgs = tensor_to_numpy_img(gen_imgs).astype(np.uint8)
+            image_sets.append(gen_imgs)
+
         final = None
 
-        for img_set in [reals, zero_fakes, fakes]:
+        for img_set in image_sets:
             tmp = None
             for img in img_set:
                 if tmp is None:
@@ -178,10 +197,45 @@ class AE_Trainer():
 
         Image.fromarray(final).save(f"{output_dir}/recon.png")
 
+    def compute_gen_loss(self, imgs, lbls, stats, force_hardcode):
+        device = imgs.get_device()
+        fake_imgs = self.ae.module.generate(len(imgs), device)
+        fake_lbls = torch.ones(len(imgs), 1).to(device)
+
+        fake_out = self.ae.module.discriminate(fake_imgs)
+        g_loss = torch.nn.functional.softplus(-fake_out)
+
+        g_loss = g_loss.mean()
+        
+        stats['losses']['g_loss'] += g_loss.item()
+        stats["losses"]["all"] += g_loss.item()
+
+        return g_loss
+
+    def compute_dis_loss(self, imgs, lbls, stats):
+        device = imgs.get_device()
+        
+        fake_lbls = torch.zeros(len(imgs), 1).to(device)
+        real_lbls = torch.ones(len(imgs), 1).to(device)
+        
+        real_out = self.ae.module.discriminate(imgs)
+        d_loss_real = torch.nn.functional.softplus(-real_out)
+
+        fake_imgs = self.ae.module.generate(len(imgs), device)
+        fake_out = self.ae.module.discriminate(fake_imgs)
+        d_loss_fake = torch.nn.functional.softplus(fake_out)
+
+        d_loss = (d_loss_real + d_loss_fake).mean()
+        
+        stats['losses']['d_loss'] += d_loss.item()
+        stats["losses"]["all"] += d_loss.item()
+
+        return d_loss
+
     def train(self, train_dloader, test_dloader, epochs=100, lr=0.0001, logger=None, \
                 recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, cls_zero_lambda=0.1, \
                 force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001, use_scheduler=False, \
-                force_hardcode=False):
+                force_hardcode=False, add_gan=False, pixel_loss="l1"):
         def log(x):
             if logger is None: return
             if not self.is_base_process(): return
@@ -189,7 +243,11 @@ class AE_Trainer():
             logger.log(x)
 
         params = list(self.ae.module.parameters())
-        optimizer = torch.optim.Adam(params, lr=lr)
+        optimizer = torch.optim.Adam(params, lr=lr, betas=(0.5, 0.999))
+        if add_gan:
+            gparams = list(self.ae.module.iin_ae.parameters()) + list(self.ae.module.generator.parameters())
+            optimizerG = torch.optim.Adam(gparams, lr=lr, betas=(0.5, 0.999))
+            optimizerD = torch.optim.Adam(self.ae.module.discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
         if use_scheduler:
             scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
@@ -201,17 +259,31 @@ class AE_Trainer():
                 train_dloader.sampler.set_epoch(epoch)
             num_batches = 0
             for imgs, lbls in tqdm(train_dloader, desc=f"Training Epoch {epoch+1}"):
-                num_batches += 1
                 optimizer.zero_grad(set_to_none=True)
+                
+                num_batches += 1
                 imgs = self.set_device(imgs)
                 lbls = self.set_device(lbls)
 
                 loss = self.compute_loss(imgs, lbls, stats, recon_lambda, recon_zero_lambda, \
                                          cls_lambda, cls_zero_lambda, force_dis_lambda, sparcity_lambda, \
-                                         kl_lambda, force_hardcode)
-
+                                         kl_lambda, force_hardcode, pixel_loss)
+                
                 loss.backward()
                 optimizer.step()
+                
+                if add_gan:
+                    d_loss = self.compute_dis_loss(imgs, lbls, stats)
+                    optimizerD.zero_grad()
+                    d_loss.backward()
+                    optimizerD.step()
+                    
+                    g_loss = self.compute_gen_loss(imgs, lbls, stats, force_hardcode)
+                    optimizerG.zero_grad()
+                    g_loss.backward()
+                    optimizerG.step()
+                    
+
 
             for key in stats["losses"]:
                 stats["losses"][key] = round(stats["losses"][key] / num_batches, 4)
@@ -223,8 +295,12 @@ class AE_Trainer():
                 + f"Disentangle Loss: {stats['losses']['disentangle']} | " \
                 + f"Normal Loss: {stats['losses']['normal']} | " \
                 + f"Recon Loss: {stats['losses']['recon']} | " \
+                + f"L1 Loss: {stats['losses']['l1']} | " \
+                + f"LPIPS Loss: {stats['losses']['lpips']} | " \
                 + f"Zero Recon Loss: {stats['losses']['zero_reg_recon']} | " \
                 + f"Sparsity Loss: {stats['losses']['sparcity']} | " \
+                + f"G Loss: {stats['losses']['g_loss']} | " \
+                + f"D Loss: {stats['losses']['d_loss']} | " \
                 + f"Img Class Loss: {stats['losses']['img_cls']} | " \
                 + f"Img Class Zero Loss: {stats['losses']['img_cls_zero']} | " \
                 + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)} | " \
@@ -233,7 +309,7 @@ class AE_Trainer():
             log(out_string)
 
             if self.is_base_process():
-                acc, zero_acc = self.eval(test_dloader, logger, force_hardcode)
+                acc, zero_acc = self.eval(test_dloader, logger, force_hardcode, add_gan)
                 log(f"Epoch: {epoch+1} | Test Accuracy: {round(acc, 4)} | Zero Test Accuracy: {round(zero_acc, 4)}")
 
             if logger is not None and self.is_base_process():
