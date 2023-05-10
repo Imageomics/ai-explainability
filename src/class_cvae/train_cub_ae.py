@@ -69,7 +69,7 @@ def load_models(args):
     if args.use_resnet_encoder:
         resnet = ResNet50(img_ch=3)
     
-    iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'bn', args.only_recon, \
+    iin_ae = IIN_AE_Wrapper(args.depth, args.num_features, in_size, 3, 'bn', False, \
                             extra_layers=args.extra_layers, num_att_vars=num_att_vars, \
                             add_real_cls_vec=args.add_real_cls_vec, resnet=resnet, inject_z=args.inject_z, \
                             add_gan=args.add_gan)
@@ -110,6 +110,7 @@ def get_args():
     parser.add_argument('--kl_lambda', type=float, default=0.0001)
     parser.add_argument('--sparcity_lambda', type=float, default=0)
     parser.add_argument('--force_dis_lambda', type=float, default=1)
+    parser.add_argument('--gamma', type=float, default=5)
     parser.add_argument('--output_dir', type=str, default="output")
     parser.add_argument('--exp_name', type=str, default="cub_debug")
     parser.add_argument('--pixel_loss', type=str, default="l1", choices=["l1", "mse"])
@@ -164,7 +165,7 @@ def main(rank, world_size, args):
                     cls_lambda=args.cls_lambda, cls_zero_lambda=args.cls_zero_lambda, \
                     force_dis_lambda=args.force_dis_lambda, sparcity_lambda=args.sparcity_lambda, \
                     kl_lambda=args.kl_lambda, use_scheduler=(not args.no_scheduler), force_hardcode=args.force_hardcode, \
-                    add_gan=args.add_gan, pixel_loss=args.pixel_loss)
+                    add_gan=args.add_gan, pixel_loss=args.pixel_loss, gamma=args.gamma)
     
     destroy_process_group()
 
@@ -178,7 +179,6 @@ if __name__ == "__main__":
         args.cls_zero_lambda = 0
         args.force_dis_lambda = 0
         args.sparcity_lambda = 0
-        args.kl_lambda = 0
         force_hardcode = 0
     assert args.img_classifier is not None or args.continue_checkpoint
     world_size = torch.cuda.device_count()

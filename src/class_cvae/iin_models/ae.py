@@ -175,6 +175,7 @@ class DecoderLayer(nn.Module):
         Activate = lambda: nn.LeakyReLU(0.2)
         out_num_feat = 64*min(2**self.scale, 16)
         
+        """
         layers = [
                 nn.ConvTranspose2d(
                     in_channels=self.in_channels,
@@ -185,7 +186,20 @@ class DecoderLayer(nn.Module):
                     bias=False),
                 Norm(num_features=out_num_feat),
                 Activate()]
-          
+        """
+        layers = [
+            nn.Upsample(scale_factor=2, mode="bilinear"),
+            nn.Conv2d(
+                in_channels=self.in_channels,
+                out_channels=out_num_feat,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False),
+            Norm(num_features=out_num_feat),
+            Activate()]
+
+
         for _ in range(self.extra_layers):
             layers += [
                 nn.Conv2d(
@@ -246,6 +260,7 @@ class DenseDecoderLayer(nn.Module):
         return x
 
     def build(self):
+        """
         self.sub_layers = nn.ModuleList([
                 nn.ConvTranspose2d(
                     in_channels=self.in_channels,
@@ -253,8 +268,17 @@ class DenseDecoderLayer(nn.Module):
                     kernel_size=self.kernel_size,
                     stride=1,
                     padding=0,
-                    bias=True)])
-
+                    bias=True)])         
+        """
+        self.sub_layers = nn.ModuleList([
+                nn.Upsample(size=self.kernel_size, mode="bilinear"),
+                nn.Conv2d(
+                    in_channels=self.in_channels,
+                    out_channels=self.out_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=True)])         
 
 class ImageLayer(nn.Module):
     def __init__(self, out_channels=3, in_channels=64):
@@ -271,12 +295,26 @@ class ImageLayer(nn.Module):
 
     def build(self):
         FinalActivate = lambda: torch.nn.Tanh()
+        
+        """
         self.sub_layers = nn.ModuleList([
                 nn.ConvTranspose2d(
                     in_channels=self.in_channels,
                     out_channels=self.out_channels,
                     kernel_size=4,
                     stride=2,
+                    padding=1,
+                    bias=False),
+                FinalActivate()
+                ])
+        """
+        self.sub_layers = nn.ModuleList([
+                nn.Upsample(scale_factor=2, mode="bilinear"),
+                nn.Conv2d(
+                    in_channels=self.in_channels,
+                    out_channels=self.out_channels,
+                    kernel_size=3,
+                    stride=1,
                     padding=1,
                     bias=False),
                 FinalActivate()

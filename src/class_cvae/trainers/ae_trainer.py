@@ -212,20 +212,25 @@ class AE_Trainer():
 
         return g_loss
 
-    def compute_dis_loss(self, imgs, lbls, stats):
+    def compute_dis_loss(self, imgs, lbls, stats, gamma=5):
         device = imgs.get_device()
+        real_img_tmp = imgs.detach().requires_grad_(True)
         
         fake_lbls = torch.zeros(len(imgs), 1).to(device)
         real_lbls = torch.ones(len(imgs), 1).to(device)
         
-        real_out = self.ae.module.discriminate(imgs)
+        real_out = self.ae.module.discriminate(real_img_tmp)
         d_loss_real = torch.nn.functional.softplus(-real_out)
+
+        r1_grads = torch.autograd.grad(outputs=[real_out.sum()], inputs=[real_img_tmp], create_graph=True, only_inputs=True)[0]
+        r1_penalty = r1_grads.square().sum([1,2,3])
+        loss_Dr1 = r1_penalty * (gamma / 2)
 
         fake_imgs = self.ae.module.generate(len(imgs), device)
         fake_out = self.ae.module.discriminate(fake_imgs)
         d_loss_fake = torch.nn.functional.softplus(fake_out)
 
-        d_loss = (d_loss_real + d_loss_fake).mean()
+        d_loss = (d_loss_real + loss_Dr1 + d_loss_fake).mean()
         
         stats['losses']['d_loss'] += d_loss.item()
         stats["losses"]["all"] += d_loss.item()
@@ -235,7 +240,7 @@ class AE_Trainer():
     def train(self, train_dloader, test_dloader, epochs=100, lr=0.0001, logger=None, \
                 recon_lambda=1, recon_zero_lambda=1, cls_lambda=0.1, cls_zero_lambda=0.1, \
                 force_dis_lambda=1, sparcity_lambda=0.1, kl_lambda=0.001, use_scheduler=False, \
-                force_hardcode=False, add_gan=False, pixel_loss="l1"):
+                force_hardcode=False, add_gan=False, pixel_loss="l1", gamma=5):
         def log(x):
             if logger is None: return
             if not self.is_base_process(): return
@@ -245,7 +250,7 @@ class AE_Trainer():
         params = list(self.ae.module.parameters())
         optimizer = torch.optim.Adam(params, lr=lr, betas=(0.5, 0.999))
         if add_gan:
-            gparams = list(self.ae.module.iin_ae.parameters()) + list(self.ae.module.generator.parameters())
+            gparams = list(self.ae.module.iin_ae.parameters())# + list(self.ae.module.generator.parameters())
             optimizerG = torch.optim.Adam(gparams, lr=lr, betas=(0.5, 0.999))
             optimizerD = torch.optim.Adam(self.ae.module.discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
         if use_scheduler:
@@ -273,13 +278,13 @@ class AE_Trainer():
                 optimizer.step()
                 
                 if add_gan:
-                    d_loss = self.compute_dis_loss(imgs, lbls, stats)
                     optimizerD.zero_grad()
+                    d_loss = self.compute_dis_loss(imgs, lbls, stats, gamma=gamma)
                     d_loss.backward()
                     optimizerD.step()
                     
-                    g_loss = self.compute_gen_loss(imgs, lbls, stats, force_hardcode)
                     optimizerG.zero_grad()
+                    g_loss = self.compute_gen_loss(imgs, lbls, stats, force_hardcode)
                     g_loss.backward()
                     optimizerG.step()
                     

@@ -6,6 +6,100 @@ from torchvision import models
 
 from iin_models.ae import IIN_AE, IIN_RESNET_AE
 
+class VAE_Encoder(nn.Module):
+    def __init__(self):
+        pass
+
+# https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
+class VAE_Decoder(nn.Module):
+    def __init__(self, z_dim, n_down, ngf, nc):
+        super().__init__()
+
+        modules = []
+
+        in_c = z_dim
+        c_mul = 32
+        for i in range(6):
+            pad = 0 if i == 0 else 1
+            modules.append(nn.ConvTranspose2d(in_c, ngf * c_mul, 4, 1, pad, bias=False))
+            modules.append(nn.BatchNorm2d(ngf * c_mul))
+            modules.append(nn.LeakyReLU(0.2))
+            in_c = ngf * c_mul
+            c_mul /= 2
+        
+        modules.append(nn.ConvTranspose2d(in_c, nc, 4, 1, 1, bias=False))
+        modules.append(nn.Tanh())
+
+        self.gen_net = nn.Sequential(modules)
+
+        self.mapping_net = nn.Sequential(
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim)
+        )
+
+    def generate(self, w):
+        return self.gen_net(w)
+
+    def forward(self, num, device):
+        z = torch.normal(0, 1, size=(num, self.z_dim)).to(device)
+        w = self.mapping_net(z)
+        return self.generate(w)
+
+
+# https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
+class Discriminator(nn.Module):
+    def __init__(self, ndf, nc):
+        super().__init__()
+        self.net = nn.Sequential(
+            # input is ``(nc) x 64 x 64``
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. ``(ndf) x 32 x 32``
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. ``(ndf*2) x 16 x 16``
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. ``(ndf*4) x 8 x 8``
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. ``(ndf*8) x 4 x 4``
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+class GAN_VAE(nn.Module):
+    def __init__(self, z_dim, n_down, num_att_vars=None, add_real_cls_vec=False, inject_z=False):
+        super().__init__()
+        self.z_dim = z_dim
+        self.num_att_vars = num_att_vars
+        self.cls_vec = None
+        if add_real_cls_vec:
+            self.cls_vec = nn.parameter.Parameter(torch.ones(num_att_vars), requires_grad=True)
+        
+        self.encoder = VAE_Encoder(z_dim, n_down)
+        self.decoder = VAE_Decoder(z_dim, n_down)
+        self.mapping_net = nn.Sequential(
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim),
+                nn.Linear(z_dim, z_dim)
+        )
+
+        self.discriminator = models.vgg16_bn(weights=models.VGG16_BN_Weights.IMAGENET1K_V1)
+        self.discriminator.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 1)
+        )
+
+
 class IIN_AE_Wrapper(nn.Module):
     def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
                  extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None, \
@@ -26,12 +120,18 @@ class IIN_AE_Wrapper(nn.Module):
         self.generator = None
         self.discriminator = None
         if add_gan:
+            """
             self.generator = nn.Sequential(
                 nn.Linear(z_dim, z_dim),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(z_dim, z_dim),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(z_dim, z_dim),
-                nn.Linear(z_dim, z_dim)
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Linear(z_dim, z_dim),
+                nn.LeakyReLU(0.2, inplace=True)
             )
+            """
             weights = models.VGG16_BN_Weights.IMAGENET1K_V1
             self.discriminator = models.vgg16_bn(weights=weights)
             self.discriminator.classifier = nn.Sequential(
@@ -54,9 +154,10 @@ class IIN_AE_Wrapper(nn.Module):
         if self.num_att_vars is not None:
             z_att = torch.randint(0, 2, (num, self.num_att_vars))
             z[:, :self.num_att_vars] = z_att
-            
-        w = self.generator(z)
-        w_c = self.replace(w)
+        
+        #w = self.generator(z)
+        #w_c = self.replace(w)
+        w_c = self.replace(z)
 
         img = self.decode(w_c)
 
