@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+import functools
+
 from iin_models.ae import IIN_AE, IIN_RESNET_AE
 
 class VAE_Encoder(nn.Module):
@@ -101,25 +103,21 @@ class GAN_VAE(nn.Module):
 
 
 class IIN_AE_Wrapper(nn.Module):
-    def __init__(self, n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                 extra_layers=0, num_att_vars=None, add_real_cls_vec=False, resnet=None, \
-                 inject_z=False, add_gan=False):
+    def __init__(self, configs):
         super().__init__()
-        self.num_att_vars = num_att_vars
-        if resnet is None:
-            self.iin_ae = IIN_AE(n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                                extra_layers=extra_layers, num_att_vars=num_att_vars, inject_z=inject_z)
-        else:
-            self.iin_ae = IIN_RESNET_AE(resnet, n_down, z_dim, in_size, in_channels, norm, deterministic, \
-                                extra_layers=extra_layers, num_att_vars=num_att_vars)
-        self.cls_vec = None
-        if add_real_cls_vec:
-            self.cls_vec = nn.parameter.Parameter(torch.ones(num_att_vars), requires_grad=True)
+        self.num_att_vars = configs.num_att_vars
+        self.iin_ae = IIN_AE(configs.depth, configs.num_features, configs.img_size, 3, \
+                             'bn', False, extra_layers=configs.extra_layers, \
+                             num_att_vars=configs.num_att_vars, inject_z=configs.inject_z)
 
-        self.z_dim = z_dim
+        self.cls_vec = None
+        if configs.add_real_cls_vec:
+            self.cls_vec = nn.parameter.Parameter(torch.ones(configs.num_att_vars), requires_grad=True)
+
+        self.z_dim = configs.num_features
         self.generator = None
         self.discriminator = None
-        if add_gan:
+        if configs.add_gan:
             """
             self.generator = nn.Sequential(
                 nn.Linear(z_dim, z_dim),
@@ -132,11 +130,15 @@ class IIN_AE_Wrapper(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True)
             )
             """
-            weights = models.VGG16_BN_Weights.IMAGENET1K_V1
-            self.discriminator = models.vgg16_bn(weights=weights)
-            self.discriminator.classifier = nn.Sequential(
-                nn.Linear(512 * 7 * 7, 1)
-            )
+
+            if configs.use_patch_gan_dis:
+                self.discriminator = NLayerDiscriminator(input_nc=configs.in_channels, ndf=64, n_layers=configs.n_disc_layers, norm_layer=nn.BatchNorm2d)
+            else:
+                weights = models.VGG16_BN_Weights.IMAGENET1K_V1
+                self.discriminator = models.vgg16_bn(weights=weights)
+                self.discriminator.classifier = nn.Sequential(
+                    nn.Linear(512 * 7 * 7, 1)
+                )
             
 
     def encode(self, x):
@@ -363,3 +365,53 @@ class HandCraftedMNISTDecoder(nn.Module):
         base[:, 0, 15:24, 22:24] = x[:, 6].view(batch, 1).repeat(1, 2*9).view(batch, 9, 2) # Bottom Right Line
 
         return base
+    
+class NLayerDiscriminator(nn.Module):
+    """Defines a PatchGAN discriminator
+        --> from
+        https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/models/networks.py
+    """
+
+    def __init__(self, input_nc=3, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
+        """Construct a PatchGAN discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+            n_layers (int)  -- the number of conv layers in the discriminator
+            norm_layer      -- normalization layer
+        """
+        super().__init__()
+        if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+            use_bias = norm_layer.func != nn.BatchNorm2d
+        else:
+            use_bias = norm_layer != nn.BatchNorm2d
+
+        kw = 4
+        padw = 1
+        sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
+        nf_mult = 1
+        nf_mult_prev = 1
+        for n in range(1, n_layers):  # gradually increase the number of filters
+            nf_mult_prev = nf_mult
+            nf_mult = min(2 ** n, 8)
+            sequence += [
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+                norm_layer(ndf * nf_mult),
+                nn.LeakyReLU(0.2, True)
+            ]
+
+        nf_mult_prev = nf_mult
+        nf_mult = min(2 ** n_layers, 8)
+        sequence += [
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
+            norm_layer(ndf * nf_mult),
+            nn.LeakyReLU(0.2, True)
+        ]
+
+        sequence += [
+            nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+        self.main = nn.Sequential(*sequence)
+
+    def forward(self, input):
+        """Standard forward."""
+        return self.main(input)
