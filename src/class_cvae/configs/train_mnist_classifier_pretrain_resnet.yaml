@@ -1,0 +1,8 @@
+output_dir: output
+exp_name: mnist_classifier_pretrain_resnet
+epochs: 20
+lr: 0.001
+batch_size: 64
+use_pretrain_resnet: true
+apply_rotation: false
+root_dset: data
