@@ -4,82 +4,91 @@ from argparse import ArgumentParser
 import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor, Compose, Resize, RandomRotation
+import torchvision.transforms as T
+import numpy as np
+
+import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group, destroy_process_group
 
 from trainers.ae_trainer import AE_Trainer
-from models import ImageClassifier, IIN_AE_Wrapper, ResNet50
+from models import IIN_AE_Wrapper, ResNet50
 from logger import Logger
-from utils import create_z_from_label, init_weights
+from utils import create_z_from_label
+from options import MNIST_VAEGAN_Configs
 
 def resize(img):
-    return Resize((28, 28))(img)
+    return T.Resize((28, 28))(img)
 
-def load_data(args):
-    train_transform = Compose([
-        RandomRotation(45),
-        Resize((args.img_size, args.img_size)),
-        ToTensor()
-    ])
-    test_transform = Compose([
-        Resize((args.img_size, args.img_size)),
-        ToTensor()
+def load_data(configs):
+    train_arr = []
+    if configs.apply_rotation:
+        train_arr.append(T.RandomRotation(45))
+    train_arr.append(T.Resize((configs.img_size, configs.img_size)))
+    train_arr.append(T.ToTensor())
+    train_transform = T.Compose(train_arr)
+
+    test_transform = T.Compose([
+        T.Resize((configs.img_size, configs.img_size)),
+        T.ToTensor()
     ])
     train_dset = MNIST(root="data", train=True, transform=train_transform, download=True)
     test_dset = MNIST(root="data", train=False, transform=test_transform)
-    train_dloader = DataLoader(train_dset, batch_size=args.batch_size, shuffle=True)
-    test_dloader = DataLoader(test_dset, batch_size=args.batch_size, shuffle=False)
+    train_dloader = DataLoader(train_dset, batch_size=configs.batch_size, shuffle=False, sampler=DistributedSampler(train_dset), num_workers=4, pin_memory=True)
+    test_dloader = DataLoader(test_dset, batch_size=configs.batch_size, shuffle=False)
 
     return train_dloader, test_dloader
 
-def load_models(args):
-    iin_ae = IIN_AE_Wrapper(4, args.num_features, 32, 1, 'an', False)
-    img_classifier = ImageClassifier(10)
+def multi_gpu_setup(rank, world_size, port="5001"):
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = port
+    init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
-    if args.continue_checkpoint:
-        iin_ae.load_state_dict(torch.load(os.path.join(args.output_dir, args.exp_name, "iin_ae.pt")))
-        args.img_classifier = os.path.join(args.output_dir, args.exp_name, "img_classifier.pt")
+def load_models(configs):
+    num_att_vars = len(create_z_from_label(torch.tensor([0]))[0])
+    if configs.only_recon:
+        num_att_vars = None
 
-    if args.use_resnet:
-        img_classifier = ResNet50(num_classes=10)
+    configs.num_att_vars = num_att_vars
+    
+    iin_ae = IIN_AE_Wrapper(configs)
+    img_classifier = ResNet50(num_classes=10, img_ch=configs.in_channels)
 
-    if not args.continue_checkpoint:
-        if not args.use_resnet:
-            img_classifier.apply(init_weights)
-
-    img_classifier.load_state_dict(torch.load(args.img_classifier))
+    if configs.continue_checkpoint:
+        iin_ae.load_state_dict(torch.load(os.path.join(configs.output_dir, configs.exp_name, "ae.pt")))
+        configs.img_classifier = os.path.join(configs.output_dir, configs.exp_name, "img_classifier.pt")
+    elif configs.ae is not None:
+        iin_ae.load_state_dict(torch.load(configs.ae))
+        img_classifier.load_state_dict(torch.load(configs.img_classifier))
+    else:
+        img_classifier.load_state_dict(torch.load(configs.img_classifier))
 
     return iin_ae, img_classifier
 
-def get_args():
-    parser = ArgumentParser()
-    parser.add_argument('--use_resnet', action='store_true', default=False)
-    parser.add_argument('--continue_checkpoint', action='store_true', default=False)
-    parser.add_argument('--img_classifier', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=0.0001)
-    parser.add_argument('--recon_lambda', type=float, default=1)
-    parser.add_argument('--recon_zero_lambda', type=float, default=1)
-    parser.add_argument('--cls_lambda', type=float, default=0.1)
-    parser.add_argument('--kl_lambda', type=float, default=0.001)
-    parser.add_argument('--sparcity_lambda', type=float, default=0.1)
-    parser.add_argument('--force_dis_lambda', type=float, default=1)
-    parser.add_argument('--output_dir', type=str, default="output")
-    parser.add_argument('--exp_name', type=str, default="debug")
-    parser.add_argument('--num_features', type=int, default=20)
-    parser.add_argument('--img_size', type=int, default=32)
-    return parser.parse_args()
+def main(rank, world_size, configs):
+    multi_gpu_setup(rank, world_size, port=configs.port)
+    ae, img_classifier = load_models(configs)
+    train_dloader, test_dloader = load_data(configs)
+
+    logger = Logger(configs.output_dir, configs.exp_name)
+
+    trainer = AE_Trainer(ae, img_classifier, create_z_from_label, \
+                         gpu_id=rank, img_cls_resize_fn=resize, logger=logger)
+    trainer.train(train_dloader, test_dloader, configs)
+    
+    destroy_process_group()
 
 if __name__ == "__main__":
-    args = get_args()
-    assert args.img_classifier is not None
-    ae, img_classifier = load_models(args)
-    train_dloader, test_dloader = load_data(args)
+    configs = MNIST_VAEGAN_Configs()
+    if configs.only_recon:
+        configs.recon_zero_lambda = 0
+        configs.cls_lambda = 0
+        configs.cls_zero_lambda = 0
+        configs.force_dis_lambda = 0
+        configs.sparcity_lambda = 0
+        configs.force_hardcode = False
+    assert configs.img_classifier is not None or configs.continue_checkpoint
+    world_size = torch.cuda.device_count()
+    mp.spawn(main, args=(world_size, configs,), nprocs=world_size)
 
-    logger = Logger(args.output_dir, args.exp_name)
-
-    trainer = AE_Trainer(ae, img_classifier, create_z_from_label, img_cls_resize_fn=resize)
-    trainer.train(train_dloader, test_dloader, epochs=args.epochs, lr=args.lr, logger=logger, \
-                    recon_lambda=args.recon_lambda, recon_zero_lambda=args.recon_zero_lambda, \
-                    cls_lambda=args.cls_lambda, force_dis_lambda=args.force_dis_lambda, \
-                    sparcity_lambda=args.sparcity_lambda, kl_lambda=args.kl_lambda)
+    

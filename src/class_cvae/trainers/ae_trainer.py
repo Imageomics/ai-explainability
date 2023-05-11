@@ -81,6 +81,10 @@ class AE_Trainer():
         stats["losses"]["l1"] += l1_loss.item()
         stats["losses"]["lpips"] += lpips_loss.item()
         loss = recon_loss
+
+        if configs.add_gan:
+            g_loss = self.compute_gen_loss(imgs_recon, stats, configs)
+            loss += g_loss
         
         if configs.cls_zero_lambda != 0 or configs.recon_zero_lambda != 0:
             z_zero_with_hardcode = torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1)
@@ -195,17 +199,16 @@ class AE_Trainer():
             else:
                 final = np.concatenate((final, tmp), axis=0)
 
+        if final.shape[2] == 1:
+            final = final[:, :, 0]
+
         Image.fromarray(final).save(f"{output_dir}/recon.png")
 
-    def compute_gen_loss(self, imgs, lbls, stats, configs):
-        device = imgs.get_device()
-        fake_imgs = self.ae.module.generate(len(imgs), device)
-        fake_lbls = torch.ones(len(imgs), 1).to(device)
+    def compute_gen_loss(self, imgs_recon, stats, configs):
+        fake_out = self.ae.module.discriminate(imgs_recon)
+        g_out = torch.nn.functional.softplus(-fake_out)
 
-        fake_out = self.ae.module.discriminate(fake_imgs)
-        g_loss = torch.nn.functional.softplus(-fake_out)
-
-        g_loss = g_loss.mean() * configs.g_lambda
+        g_loss = (torch.sum(g_out) / g_out.shape[0]) * configs.g_lambda
         
         stats['losses']['g_loss'] += g_loss.item()
         stats["losses"]["all"] += g_loss.item()
@@ -213,11 +216,7 @@ class AE_Trainer():
         return g_loss
 
     def compute_dis_loss(self, imgs, lbls, stats, configs):
-        device = imgs.get_device()
         real_img_tmp = imgs.detach().requires_grad_(True)
-        
-        fake_lbls = torch.zeros(len(imgs), 1).to(device)
-        real_lbls = torch.ones(len(imgs), 1).to(device)
         
         real_out = self.ae.module.discriminate(real_img_tmp)
         d_loss_real = torch.nn.functional.softplus(-real_out)
@@ -226,10 +225,18 @@ class AE_Trainer():
         r1_penalty = r1_grads.square().sum([1,2,3])
         loss_Dr1 = r1_penalty * (configs.gamma / 2)
 
-        fake_imgs = self.ae.module.generate(len(imgs), device)
-        fake_out = self.ae.module.discriminate(fake_imgs)
+        z = self.ae.module.encode(imgs)
+        z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
+        if configs.force_hardcode:
+            imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
+        else:
+            imgs_recon = self.ae.module.decode(z)
+
+        fake_out = self.ae.module.discriminate(imgs_recon)
         d_loss_fake = torch.nn.functional.softplus(fake_out)
 
+        tmp_loss = torch.sum(d_loss_real) / d_loss_real.shape[0]
+        tmp_loss += torch.sum(d_loss_real) / d_loss_real.shape[0]
         d_loss = (d_loss_real.mean() + loss_Dr1.mean() + d_loss_fake.mean()) * configs.d_lambda
         
         stats['losses']['d_loss'] += d_loss.item()
@@ -241,9 +248,8 @@ class AE_Trainer():
 
         params = list(self.ae.module.parameters())
         optimizer = torch.optim.Adam(params, lr=configs.lr, betas=(0.5, 0.999))
+        optimizerD = None
         if configs.add_gan:
-            gparams = list(self.ae.module.iin_ae.parameters())# + list(self.ae.module.generator.parameters())
-            optimizerG = torch.optim.Adam(gparams, lr=configs.lr, betas=(0.5, 0.999))
             optimizerD = torch.optim.Adam(self.ae.module.discriminator.parameters(), \
                                           lr=configs.lr, betas=(0.5, 0.999))
 
@@ -262,7 +268,7 @@ class AE_Trainer():
                 lbls = self.set_device(lbls)
 
                 loss = self.compute_loss(imgs, lbls, stats, configs)
-                
+
                 loss.backward()
                 optimizer.step()
                 
@@ -272,14 +278,7 @@ class AE_Trainer():
                         d_loss = self.compute_dis_loss(imgs, lbls, stats, configs)
                         d_loss.backward()
                         optimizerD.step()
-                    
-                    if configs.g_lambda != 0:
-                        optimizerG.zero_grad()
-                        g_loss = self.compute_gen_loss(imgs, lbls, stats, configs)
-                        g_loss.backward()
-                        optimizerG.step()
-                    
-
+                
 
             for key in stats["losses"]:
                 stats["losses"][key] = round(stats["losses"][key] / num_batches, 4)
