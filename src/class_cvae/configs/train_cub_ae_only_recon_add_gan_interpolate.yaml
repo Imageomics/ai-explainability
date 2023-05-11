@@ -1,5 +1,5 @@
 use_bbox: true
-continue_checkpoint: false
+continue_checkpoint: true
 no_scheduler: true
 img_classifier: output/cub_img_classifier_small/img_classifier.pt
 add_real_cls_vec: false
@@ -14,14 +14,14 @@ recon_lambda: 1.0
 recon_zero_lambda: 0
 cls_lambda: 0
 cls_zero_lambda: 0
-kl_lambda: 1.0
+kl_lambda: 0.001
 img_size: 64
 depth: 5
-gamma: 6.2
+gamma: 5
 sparcity_lambda: 0
 force_dis_lambda: 0
 pixel_loss: l1
 output_dir: output
-exp_name: cub_ae_512_only_recon_add_gan_bn_interpolate_dense_up_reg_mlr_g10_nomap_kl_01
+exp_name: cub_ae_512_only_recon_add_gan_bn_interpolate_dense_up_reg_mlr_g10_nomap_kl
 num_features: 512
 root_dset: /local/scratch/cv_datasets/CUB_200_2011/

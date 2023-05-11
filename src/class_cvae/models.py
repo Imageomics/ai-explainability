@@ -106,7 +106,7 @@ class IIN_AE_Wrapper(nn.Module):
     def __init__(self, configs):
         super().__init__()
         self.num_att_vars = configs.num_att_vars
-        self.iin_ae = IIN_AE(configs.depth, configs.num_features, configs.img_size, 3, \
+        self.iin_ae = IIN_AE(configs.depth, configs.num_features, configs.img_size, configs.in_channels, \
                              'bn', False, extra_layers=configs.extra_layers, \
                              num_att_vars=configs.num_att_vars, inject_z=configs.inject_z)
 
@@ -183,7 +183,8 @@ class IIN_AE_Wrapper(nn.Module):
         return self.decode(self.encode(x))
 
     def kl_loss(self):
-        return self.dist.kl().mean()
+        loss = self.dist.kl()
+        return torch.sum(loss) / loss.shape[0]
 
 class ResNet50(nn.Module):
     def __init__(self, pretrain=True, num_classes=10, img_ch=1):
