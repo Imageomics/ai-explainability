@@ -1,9 +1,9 @@
 continue_checkpoint: true
 no_scheduler: true
-img_classifier: output/mnist_classifier_baseline/img_classifier.pt
+img_classifier: output/mnist_classifier_pretrain_resnet_rotation/img_classifier.pt
 add_real_cls_vec: false
-force_hardcode: false
-only_recon: true
+force_hardcode: true
+only_recon: false
 add_gan: true
 use_patch_gan_dis: true
 apply_rotation: false
@@ -21,11 +21,11 @@ depth: 4
 n_disc_layers: 3
 gamma: 6.2
 sparcity_lambda: 0
-force_dis_lambda: 0
+force_dis_lambda: 1.0
 d_lambda: 1.0
 g_lambda: 1.0
 pixel_loss: l1
 output_dir: output
-exp_name: mnist_ae_baseline
+exp_name: mnist_ae_rubric_fhc
 num_features: 10
 root_dset: data
