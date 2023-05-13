@@ -50,6 +50,22 @@ def tensor_to_numpy_img(x):
     x = np.transpose(x, (0, 2, 3, 1)) * 255
     return x.astype(np.uint8)
 
+def create_diff_img(org, new):
+    diffs = org.astype(np.float64) - new.astype(np.float64)
+    if len(diffs.shape) > 2:
+        if diffs.shape[2] > 1:
+            diffs = np.sqrt((diffs**2).sum(2))
+        else:
+            diffs = np.abs(diffs[:, :, 0])
+
+    diffs -= diffs.min()
+    diffs /= diffs.max()
+
+    diffs = (diffs * 255).astype(np.uint8)
+
+    return diffs
+    
+
 def save_imgs(reals, fakes, confs, org_confs, output):
     reals = tensor_to_numpy_img(reals).astype(np.float)
     fakes = tensor_to_numpy_img(fakes).astype(np.float)
@@ -138,11 +154,34 @@ def init_weights(m):
         nn.init.xavier_normal_(m.weight)
         nn.init.zeros_(m.bias)
 
+def fig_to_numpy(fig):
+    fig.canvas.draw()
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    w, h = fig.canvas.get_width_height()
+    data = data.reshape((h, w, 3))
+    return data
+
+def create_graph_from_tensor(ten):
+    z = ten.detach().cpu().numpy()
+    ticks = np.arange(len(z))
+    colors = ['g' if v >= 0 else 'r' for v in z]
+    fig, ax = plt.subplots()
+    ax.bar(ticks, z, color=colors, edgecolor='black')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.get_yaxis().set_ticks([])
+    ax.set_xticks(ticks)
+    ax.tick_params(axis='x', labelsize=24)
+    fig.tight_layout(pad=0)
+
+    return fig
+
 def save_tensor_as_graph(ten, output="tensor_graph.png"):
     # Assumes 1-D tensor
-    z = ten.detach().cpu().numpy()
-    plt.bar(np.arange(len(z)), z)
-    plt.savefig(output)
+    fig = create_graph_from_tensor(ten)
+    fig.savefig(output)
     plt.close()
 
 def calc_img_diff_loss(org_img_recon, imgs_recon, loss_fn):
