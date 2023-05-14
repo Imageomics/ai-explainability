@@ -117,6 +117,7 @@ class IIN_AE_Wrapper(nn.Module):
         self.z_dim = configs.num_features
         self.generator = None
         self.discriminator = None
+        self.add_gan = configs.add_gan
         if configs.add_gan:
             """
             self.generator = nn.Sequential(
@@ -140,6 +141,12 @@ class IIN_AE_Wrapper(nn.Module):
                     nn.Linear(512 * 7 * 7, 1)
                 )
             
+    def get_ae_parameters(self):
+        params = self.parameters()
+        if not self.add_gan: return params
+        dis_params = set(self.discriminator.parameters())
+        rv = (p for p in params if not p in dis_params)
+        return rv
 
     def encode(self, x):
         self.dist = self.iin_ae.encode(x)
@@ -167,7 +174,7 @@ class IIN_AE_Wrapper(nn.Module):
     
     #TODO: resnet18?
     def discriminate(self, imgs):
-        return self.discriminator(imgs)
+        return nn.Sigmoid()(self.discriminator(imgs))
     
     def replace(self, z):
         if self.cls_vec is None: return z

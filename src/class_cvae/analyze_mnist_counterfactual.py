@@ -18,6 +18,8 @@ Stop counterfactual training after:
 import random
 import os
 
+from tqdm import tqdm
+
 import torch
 import torch.nn as nn
 
@@ -30,7 +32,7 @@ import matplotlib.pyplot as plt
 from logger import Logger
 from models import IIN_AE_Wrapper, ResNet50
 from options import MNIST_CF_Analysis_Configs
-from utils import create_z_from_label, create_graph_from_tensor, fig_to_numpy, tensor_to_numpy_img, create_diff_img
+from utils import create_z_from_label, create_graph_from_tensor, fig_to_numpy, tensor_to_numpy_img, create_diff_img, set_seed
 
 def load_models(configs):
     num_att_vars = len(create_z_from_label(torch.tensor([0]))[0])
@@ -154,7 +156,7 @@ def create_counterfactual(ae, img_classifier, dset, logger, src, tgt, configs):
         recon_img = tensor_to_numpy_img(recon_img)[0][:, :, 0]
         cf_example = tensor_to_numpy_img(cf_example)[0][:, :, 0]
 
-        delta_z_fig = create_graph_from_tensor(z_edit[0])
+        delta_z_fig = create_graph_from_tensor(z_edit[0], configs.font_size)
         delta_z = fig_to_numpy(delta_z_fig)
         plt.close()
 
@@ -192,8 +194,9 @@ if __name__ == "__main__":
     if configs.only_recon:
         configs.force_hardcode = False
         configs.num_attributes = configs.num_features
+    
+    set_seed(configs.seed)
         
-
     ae, img_classifier = load_models(configs)
     test_dset = load_data(configs)
 
@@ -201,11 +204,12 @@ if __name__ == "__main__":
     results_dir = os.path.join(logger.get_path(), "results")
     os.makedirs(results_dir, exist_ok=True)
 
-
-    for src in range(10):
-        for tgt in range(10):
-            if src == tgt: continue
-            cf_output = create_counterfactual(ae, img_classifier, test_dset, logger, src, tgt, configs)
-            save_dir = os.path.join(results_dir, f"{src}_to_{tgt}")
-            os.makedirs(save_dir, exist_ok=True)
-            save_results(save_dir, cf_output)
+    with tqdm(total=100) as pbar:
+        for src in range(10):
+            for tgt in range(10):
+                if src == tgt: continue
+                cf_output = create_counterfactual(ae, img_classifier, test_dset, logger, src, tgt, configs)
+                save_dir = os.path.join(results_dir, f"{src}_to_{tgt}")
+                os.makedirs(save_dir, exist_ok=True)
+                save_results(save_dir, cf_output)
+                pbar.update(1)

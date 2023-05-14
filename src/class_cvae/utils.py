@@ -161,7 +161,7 @@ def fig_to_numpy(fig):
     data = data.reshape((h, w, 3))
     return data
 
-def create_graph_from_tensor(ten):
+def create_graph_from_tensor(ten, font_size=12):
     z = ten.detach().cpu().numpy()
     ticks = np.arange(len(z))
     colors = ['g' if v >= 0 else 'r' for v in z]
@@ -173,7 +173,7 @@ def create_graph_from_tensor(ten):
     ax.spines['left'].set_visible(False)
     ax.get_yaxis().set_ticks([])
     ax.set_xticks(ticks)
-    ax.tick_params(axis='x', labelsize=24)
+    ax.tick_params(axis='x', labelsize=font_size)
     fig.tight_layout(pad=0)
 
     return fig
