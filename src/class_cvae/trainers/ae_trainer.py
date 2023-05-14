@@ -48,6 +48,7 @@ class AE_Trainer():
                 "disentangle" : 0,
                 "img_cls" : 0,
                 "img_cls_zero" : 0,
+                "swap" : 0,
                 "g_loss" : 0,
                 "d_loss" : 0,
                 "all" : 0
@@ -69,10 +70,11 @@ class AE_Trainer():
         z = self.ae.module.encode(imgs)
         z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
         if configs.force_hardcode:
-            z_with_hardcode = torch.cat((z_force, z[:, self.num_att_vars:]), 1)
-            imgs_recon = self.ae.module.decode(self.ae.module.replace(z_with_hardcode))
+            z_for_recon = torch.cat((z_force, z[:, self.num_att_vars:]), 1)
         else:
-            imgs_recon = self.ae.module.decode(self.ae.module.replace(z))
+            z_for_recon = z
+
+        imgs_recon = self.ae.module.decode(self.ae.module.replace(z_for_recon))
 
         l1_loss = pixel_loss_fn(imgs, imgs_recon)
         lpips_loss = lpips_loss_fn(imgs, imgs_recon)
@@ -83,13 +85,34 @@ class AE_Trainer():
         loss = recon_loss
 
         if configs.add_gan:
-            g_loss = self.compute_gen_loss(imgs_recon, stats, configs)
+            g_loss = self.compute_gen_loss(imgs_recon, configs)
+            stats['losses']['g_loss'] += g_loss.item()
             loss += g_loss
+
+        if configs.swap_lambda != 0:
+            z_att = z_for_recon[:, :self.num_att_vars]
+            z_var = z_for_recon[:, self.num_att_vars:]
+            z_var_shuffle = z_var[torch.randperm(len(z_var))]
+            z_comb = torch.cat((z_att, z_var_shuffle), 1)
+
+            swap_recon = self.ae.module.decode(self.ae.module.replace(z_comb))
+            out_swap = self.img_classifier(self.img_cls_resize_fn(swap_recon))
+            swap_cls_loss = class_loss_fn(out_swap, lbls) 
+
+            swap_loss = swap_cls_loss
+
+            if configs.add_gan:
+                swap_real_loss = self.compute_gen_loss(swap_recon, configs)
+                swap_loss += swap_real_loss
+
+            swap_loss *= configs.swap_lambda
+            loss += swap_loss
+            stats["losses"]["swap"] += swap_loss.item()
         
         if configs.cls_zero_lambda != 0 or configs.recon_zero_lambda != 0:
             z_zero_with_hardcode = torch.cat((z_force, torch.zeros_like(z[:, self.num_att_vars:])), 1)
             imgs_recon_zero_reg = self.ae.module.decode(self.ae.module.replace(z_zero_with_hardcode))
-            recon_loss_zero = (pixel_loss_fn(imgs, imgs_recon_zero_reg) + lpips_loss_fn(imgs, imgs_recon_zero_reg)) * recon_zero_lambda
+            recon_loss_zero = (pixel_loss_fn(imgs, imgs_recon_zero_reg) + lpips_loss_fn(imgs, imgs_recon_zero_reg)) * configs.recon_zero_lambda
             stats["losses"]["zero_reg_recon"] += recon_loss_zero.item()
             loss += recon_loss_zero
 
@@ -126,7 +149,7 @@ class AE_Trainer():
 
         stats["losses"]["all"] += loss.item()
 
-        return loss
+        return loss, imgs_recon
     
     def eval(self, test_dloader, configs):
         correct = 0
@@ -204,40 +227,38 @@ class AE_Trainer():
 
         Image.fromarray(final).save(f"{output_dir}/recon.png")
 
-    def compute_gen_loss(self, imgs_recon, stats, configs):
+    def compute_gen_loss(self, imgs_recon, configs):
         fake_out = self.ae.module.discriminate(imgs_recon)
         g_out = torch.nn.functional.softplus(-fake_out)
 
         g_loss = (torch.sum(g_out) / g_out.shape[0]) * configs.g_lambda
-        
-        stats['losses']['g_loss'] += g_loss.item()
-        stats["losses"]["all"] += g_loss.item()
 
         return g_loss
 
-    def compute_dis_loss(self, imgs, lbls, stats, configs):
-        real_img_tmp = imgs.detach().requires_grad_(True)
+    def compute_dis_loss(self, imgs, recon, lbls, stats, configs):
+        imgs_recon = recon.detach()
         
-        real_out = self.ae.module.discriminate(real_img_tmp)
-        d_loss_real = torch.nn.functional.softplus(-real_out)
+        real_out = self.ae.module.discriminate(imgs)
+        d_loss_real = torch.nn.functional.softplus(-real_out).mean()
 
-        r1_grads = torch.autograd.grad(outputs=[real_out.sum()], inputs=[real_img_tmp], create_graph=True, only_inputs=True)[0]
-        r1_penalty = r1_grads.square().sum([1,2,3])
-        loss_Dr1 = r1_penalty * (configs.gamma / 2)
-
-        z = self.ae.module.encode(imgs)
-        z_force = self.lbls_to_att_fn(lbls).float().to(z.get_device())
-        if configs.force_hardcode:
-            imgs_recon = self.ae.module.decode(torch.cat((z_force, z[:, self.num_att_vars:]), 1))
-        else:
-            imgs_recon = self.ae.module.decode(z)
+        #r1_grads = torch.autograd.grad(outputs=[real_out.sum()], inputs=[real_img_tmp], create_graph=True, only_inputs=True)[0]
+        #r1_penalty = r1_grads.square().sum([1,2,3])
+        #loss_Dr1 = r1_penalty * (configs.gamma / 2)
 
         fake_out = self.ae.module.discriminate(imgs_recon)
-        d_loss_fake = torch.nn.functional.softplus(fake_out)
+        d_loss_fake = torch.nn.functional.softplus(fake_out).mean()
 
-        tmp_loss = torch.sum(d_loss_real) / d_loss_real.shape[0]
-        tmp_loss += torch.sum(d_loss_real) / d_loss_real.shape[0]
-        d_loss = (d_loss_real.mean() + loss_Dr1.mean() + d_loss_fake.mean()) * configs.d_lambda
+        b, c, w, h = imgs.shape
+        t = torch.rand((b, 1, 1, 1)).to(imgs.get_device())
+        t = t.repeat(1, c, w, h)
+
+        inter = (t * imgs + (1 - t) * imgs_recon).requires_grad_(True)
+        inter_out = self.ae.module.discriminate(inter).view(b, -1)
+        grads = torch.autograd.grad(outputs=inter_out, inputs=inter, grad_outputs=torch.ones_like(inter_out), \
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+        grad_penalty_loss = torch.pow(grads.norm(2, dim=1)-1, 2).mean() * configs.gamma
+
+        d_loss = (d_loss_real + grad_penalty_loss + d_loss_fake) * configs.d_lambda
         
         stats['losses']['d_loss'] += d_loss.item()
         stats["losses"]["all"] += d_loss.item()
@@ -246,7 +267,7 @@ class AE_Trainer():
 
     def train(self, train_dloader, test_dloader, configs):
 
-        params = list(self.ae.module.parameters())
+        params = list(self.ae.module.get_ae_parameters())
         optimizer = torch.optim.Adam(params, lr=configs.lr, betas=(0.5, 0.999))
         optimizerD = None
         if configs.add_gan:
@@ -267,7 +288,7 @@ class AE_Trainer():
                 imgs = self.set_device(imgs)
                 lbls = self.set_device(lbls)
 
-                loss = self.compute_loss(imgs, lbls, stats, configs)
+                loss, imgs_recon = self.compute_loss(imgs, lbls, stats, configs)
 
                 loss.backward()
                 optimizer.step()
@@ -275,7 +296,7 @@ class AE_Trainer():
                 if configs.add_gan:
                     if configs.d_lambda != 0:
                         optimizerD.zero_grad()
-                        d_loss = self.compute_dis_loss(imgs, lbls, stats, configs)
+                        d_loss = self.compute_dis_loss(imgs, imgs_recon, lbls, stats, configs)
                         d_loss.backward()
                         optimizerD.step()
                 
@@ -292,14 +313,15 @@ class AE_Trainer():
                 + f"Recon Loss: {stats['losses']['recon']} | " \
                 + f"L1 Loss: {stats['losses']['l1']} | " \
                 + f"LPIPS Loss: {stats['losses']['lpips']} | " \
-                + f"Zero Recon Loss: {stats['losses']['zero_reg_recon']} | " \
-                + f"Sparsity Loss: {stats['losses']['sparcity']} | " \
                 + f"G Loss: {stats['losses']['g_loss']} | " \
                 + f"D Loss: {stats['losses']['d_loss']} | " \
                 + f"Img Class Loss: {stats['losses']['img_cls']} | " \
-                + f"Img Class Zero Loss: {stats['losses']['img_cls_zero']} | " \
+                + f"Swap Loss: {stats['losses']['swap']} | " \
                 + f"Image Class Acc: {round(stats['correct']/stats['total'], 4)} | " \
-                + f"Image Zero Class Acc: {round(stats['zero_correct']/stats['total'], 4)}" \
+                #+ f"Zero Recon Loss: {stats['losses']['zero_reg_recon']} | " \
+                #+ f"Sparsity Loss: {stats['losses']['sparcity']} | " \
+                #+ f"Img Class Zero Loss: {stats['losses']['img_cls_zero']} | " \
+                #+ f"Image Zero Class Acc: {round(stats['zero_correct']/stats['total'], 4)}" \
 
             self.log(out_string)
 
