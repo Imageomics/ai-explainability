@@ -1,10 +1,10 @@
-# ai_explanability
+# AI explainability approaches for Imageomics
 
 This repository contains code for 4 projects in the `src/` directory:
-* `ImageomicsButterflies/`
-* `butterflies_transformation/`
-* `class_cvae/`
-* `sinGAN/`
+* [`ImageomicsButterflies/`](src/ImageomicsButterflies/)
+* [`butterflies_transformation/`](src/butterflies_transformation/)
+* [`class_cvae/`](src/class_cvae/)
+* [`sinGAN/`](src/sinGAN/)
 
 Please see each for further information.
 
